@@ -1,0 +1,136 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Xeemes-commits] r14 - trunk/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/xeemes-commits/2005-October/index.html" >
+   <LINK REL="made" HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r14%20-%20trunk/src&In-Reply-To=%3C200510211939.j9LJduu8025553%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000011.html">
+   <LINK REL="Next"  HREF="000013.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Xeemes-commits] r14 - trunk/src</H1>
+    <B>David Frese at BerliOS</B> 
+    <A HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r14%20-%20trunk/src&In-Reply-To=%3C200510211939.j9LJduu8025553%40sheep.berlios.de%3E"
+       TITLE="[Xeemes-commits] r14 - trunk/src">dfrese at berlios.de
+       </A><BR>
+    <I>Fri Oct 21 21:39:56 CEST 2005</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000011.html">[Xeemes-commits] r13 - trunk/src
+</A></li>
+        <LI>Next message: <A HREF="000013.html">[Xeemes-commits] r15 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#12">[ date ]</a>
+              <a href="thread.html#12">[ thread ]</a>
+              <a href="subject.html#12">[ subject ]</a>
+              <a href="author.html#12">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: dfrese
+Date: 2005-10-21 21:39:56 +0200 (Fri, 21 Oct 2005)
+New Revision: 14
+
+Modified:
+   trunk/src/resources.inc
+   trunk/src/utils.inc
+Log:
+Subject: Remove . and .. from location paths
+
+
+
+Modified: trunk/src/resources.inc
+===================================================================
+--- trunk/src/resources.inc	2005-10-21 19:32:20 UTC (rev 13)
++++ trunk/src/resources.inc	2005-10-21 19:39:56 UTC (rev 14)
+@@ -42,6 +42,7 @@
+     if ($info['dirname'] == '/') $info['dirname'] = '';
+     $location = $info['dirname'].'/'.$location;
+   }
++  $location = canonic_path($location); // TODO: can return false
+   $info = pathinfo($location);
+   $ext = strtolower($info['extension']);
+   if (in_array($ext, ImageResource::extensions()))
+
+Modified: trunk/src/utils.inc
+===================================================================
+--- trunk/src/utils.inc	2005-10-21 19:32:20 UTC (rev 13)
++++ trunk/src/utils.inc	2005-10-21 19:39:56 UTC (rev 14)
+@@ -37,6 +37,44 @@
+   define('XEEMES_BASE_DIR', $info2['dirname']);
+ }
+ 
++function canonic_path($relative_path) {
++  // Remove any ./
++  $relative_path = str_replace('/./', '/', $relative_path);
++
++  /*
++  // Remove trailing /
++  if ($relative_path[strlen($relative_path)-1] == '/')
++    $relative_path = substr($relative_path, 0, -1);
++  */
++
++  $realpath = '';
++  $q = 0;
++  $p = strpos($relative_path, '/..', $q);
++  while ($p !== false) {
++    // Get the next part of the path
++    if ($p != $q)
++      $realpath .= substr($relative_path, $q, $p);
++
++    // Find the edge of the previous directory
++    $i = strrpos($realpath, '/');
++    if ($i === false)
++      return false;  // Not enough directories to go up any further.
++
++    // Remove the directory
++    $realpath = substr($realpath, 0, $i);
++    // Take out the &quot;/..&quot;
++    $relative_path = substr($relative_path, 0, $p) .
++      substr($relative_path, $p+3);
++
++    // Find the next &quot;/..&quot;
++    $q = $p;
++    $p = strpos($relative_path, '/..', $q);
++  }
++  // Get the rest of the relative path.
++  $realpath .= substr($relative_path, $q);
++  return $realpath;
++}
++
+ function strpos_nested($text, $end_str, $start_str, $offset = 0) {
+   do {
+     $end_pos = strpos($text, $end_str, $offset);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000011.html">[Xeemes-commits] r13 - trunk/src
+</A></li>
+	<LI>Next message: <A HREF="000013.html">[Xeemes-commits] r15 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#12">[ date ]</a>
+              <a href="thread.html#12">[ thread ]</a>
+              <a href="subject.html#12">[ subject ]</a>
+              <a href="author.html#12">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/xeemes-commits">More information about the Xeemes-commits
+mailing list</a><br>
+</body></html>

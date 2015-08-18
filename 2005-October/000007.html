@@ -1,0 +1,98 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Xeemes-commits] r9 - trunk/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/xeemes-commits/2005-October/index.html" >
+   <LINK REL="made" HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r9%20-%20trunk/src&In-Reply-To=%3C200510171925.j9HJPLal023549%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000006.html">
+   <LINK REL="Next"  HREF="000008.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Xeemes-commits] r9 - trunk/src</H1>
+    <B>David Frese at BerliOS</B> 
+    <A HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r9%20-%20trunk/src&In-Reply-To=%3C200510171925.j9HJPLal023549%40sheep.berlios.de%3E"
+       TITLE="[Xeemes-commits] r9 - trunk/src">dfrese at berlios.de
+       </A><BR>
+    <I>Mon Oct 17 21:25:21 CEST 2005</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000006.html">[Xeemes-commits] r8 - trunk/src
+</A></li>
+        <LI>Next message: <A HREF="000008.html">[Xeemes-commits] r10 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#7">[ date ]</a>
+              <a href="thread.html#7">[ thread ]</a>
+              <a href="subject.html#7">[ subject ]</a>
+              <a href="author.html#7">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: dfrese
+Date: 2005-10-17 21:25:21 +0200 (Mon, 17 Oct 2005)
+New Revision: 9
+
+Modified:
+   trunk/src/resources.inc
+Log:
+Subject: Split layout meta-data in layout-name and layout-class
+
+
+
+Modified: trunk/src/resources.inc
+===================================================================
+--- trunk/src/resources.inc	2005-10-08 20:34:19 UTC (rev 8)
++++ trunk/src/resources.inc	2005-10-17 19:25:21 UTC (rev 9)
+@@ -25,6 +25,7 @@
+ 
+ require_once('transformation.inc');
+ require_once('wikipedia.inc');
++require_once('meta.inc');
+ 
+ define('XEEMES_RESOURCE_UNKNOWN',    1);
+ define('XEEMES_RESOURCE_XML',        2);
+@@ -160,8 +161,10 @@
+ 
+   function xmlContent() {
+     $doc = $this-&gt;domContent();
+-    if ($this-&gt;get_meta('layout')) {
+-      $layout = new Layout($this-&gt;get_meta('layout')); // class:name?
++    if ($this-&gt;get_meta('layout-name')) {
++      $class = $this-&gt;get_meta('layout-class');
++      if (!$class) $class = 'simple';
++      $layout = new Layout($class, $this-&gt;get_meta('layout-name'));
+       $doc = $layout-&gt;process($doc, array()); // TODO parameters
+     }
+     $this-&gt;convert_special_tags($doc); // TODO prevent mutual incs
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000006.html">[Xeemes-commits] r8 - trunk/src
+</A></li>
+	<LI>Next message: <A HREF="000008.html">[Xeemes-commits] r10 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#7">[ date ]</a>
+              <a href="thread.html#7">[ thread ]</a>
+              <a href="subject.html#7">[ subject ]</a>
+              <a href="author.html#7">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/xeemes-commits">More information about the Xeemes-commits
+mailing list</a><br>
+</body></html>

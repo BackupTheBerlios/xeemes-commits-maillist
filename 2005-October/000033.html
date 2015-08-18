@@ -1,0 +1,178 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Xeemes-commits] r35 - trunk/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/xeemes-commits/2005-October/index.html" >
+   <LINK REL="made" HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r35%20-%20trunk/src&In-Reply-To=%3C200510302034.j9UKYNqE022341%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000032.html">
+   
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Xeemes-commits] r35 - trunk/src</H1>
+    <B>David Frese at BerliOS</B> 
+    <A HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r35%20-%20trunk/src&In-Reply-To=%3C200510302034.j9UKYNqE022341%40sheep.berlios.de%3E"
+       TITLE="[Xeemes-commits] r35 - trunk/src">dfrese at berlios.de
+       </A><BR>
+    <I>Sun Oct 30 21:34:23 CET 2005</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000032.html">[Xeemes-commits] r34 - trunk/src
+</A></li>
+        
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#33">[ date ]</a>
+              <a href="thread.html#33">[ thread ]</a>
+              <a href="subject.html#33">[ subject ]</a>
+              <a href="author.html#33">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: dfrese
+Date: 2005-10-30 21:34:22 +0100 (Sun, 30 Oct 2005)
+New Revision: 35
+
+Modified:
+   trunk/src/resources.inc
+   trunk/src/utils.inc
+Log:
+Subject: Changed way of PI handling
+
+
+
+Modified: trunk/src/resources.inc
+===================================================================
+--- trunk/src/resources.inc	2005-10-30 20:32:45 UTC (rev 34)
++++ trunk/src/resources.inc	2005-10-30 20:34:22 UTC (rev 35)
+@@ -237,32 +237,15 @@
+   function domContent() {
+     $doc = DOMDocument::load($this-&gt;filename);
+ 
+-    $this-&gt;process_instructions($doc);
++    global $allow_php;
++    if ($allow_php)
++      replace_php_instructions($doc);
++
+     XeemesTag::replaceTags($this, $doc-&gt;documentElement);
+     // TODO transformations
+ 
+     return $doc;
+   }
+-
+-  function xmlContent() {
+-    $doc = $this-&gt;domContent();
+-    return $doc-&gt;saveXML();
+-  }
+-
+-  function process_instructions($doc, $node = false) {
+-    global $allow_php;
+-    if ($node === false) $node = $doc-&gt;documentElement;
+-    if ($node-&gt;nodeType == XML_PI_NODE) {
+-      if (($node-&gt;target == 'php') &amp;&amp; $allow_php) {
+-	$text = eval_php($node-&gt;data);
+-	$nodes = import_html_text($doc, $text);
+-	replace_node($node, $nodes);
+-      }
+-    } else if ($node-&gt;nodeType == XML_ELEMENT_NODE) {
+-      foreach (nodelist2array($node-&gt;childNodes) as $child)
+-	$this-&gt;process_instructions($doc, $child);
+-    }
+-  }
+ }
+ 
+ class HTMLResource extends XMLResource {
+
+Modified: trunk/src/utils.inc
+===================================================================
+--- trunk/src/utils.inc	2005-10-30 20:32:45 UTC (rev 34)
++++ trunk/src/utils.inc	2005-10-30 20:34:22 UTC (rev 35)
+@@ -110,27 +110,45 @@
+   $oldnode-&gt;parentNode-&gt;removeChild($oldnode);
+ }
+ 
+-function eval_php($program) {
++function replace_process_instructions($doc, $defs, $node = false) {
++  if ($node === false) $node = $doc-&gt;documentElement;
++  if ($node-&gt;nodeType == XML_PI_NODE) {
++    if (array_key_exists($node-&gt;target, $defs)) {
++      $fun = $defs[$node-&gt;target];
++      $node-&gt;parentNode-&gt;replaceChild($fun($doc, $node-&gt;data), $node);
++    } else {
++      // error, ignore, keep?
++    }
++  } else if ($node-&gt;nodeType == XML_ELEMENT_NODE) {
++    foreach (nodelist2array($node-&gt;childNodes) as $child)
++      replace_process_instructions($doc, $defs, $child);
++  }
++}
++
++function replace_php_instructions($doc) {
++  replace_process_instructions($doc, array('php' =&gt; 'eval_php'));
++}
++
++function eval_php($doc, $program) {
+   ob_start();
+   eval($program);
+-  $result = ob_get_contents();
++  $text = ob_get_contents();
+   ob_end_clean();
+-  return $result;
++
++  return import_html_text($doc, $text);
+ }
+ 
+ function import_html_text($doc, $text) {
+-   $xml_text = '&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;'.&quot;\n&quot;.
+-    '&lt;doc&gt;'.$text.'&lt;/doc&gt;';
+-  $xml = DOMDocument::loadXML($xml_text);
++  $xml_text = '&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;'.&quot;\n&quot;.
++    '&lt;span&gt;'.$text.'&lt;/span&gt;';
++  $xml = @DOMDocument::loadXML($xml_text);
+   if (!$xml) {
+-    return array($doc-&gt;createComment('Failed to load text as XML: '), // TODO: Error message?
+-		 $doc-&gt;createTextNode($text));
+-  } else {
+-    $result = array();
+-    foreach (nodelist2array($xml-&gt;documentElement-&gt;childNodes) as $ch)
+-      $result []= $doc-&gt;importNode($ch);
+-    return $result;
+-  }
++    $span = $doc-&gt;createElement('span');
++    $span-&gt;appendChild($doc-&gt;createComment('Failed to load text as XML: '));
++    $span-&gt;appendChild($doc-&gt;createTextNode($text));
++    return $span;
++  } else
++    return $doc-&gt;importNode($xml-&gt;documentElement, true);
+ }
+ 
+ ?&gt;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000032.html">[Xeemes-commits] r34 - trunk/src
+</A></li>
+	
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#33">[ date ]</a>
+              <a href="thread.html#33">[ thread ]</a>
+              <a href="subject.html#33">[ subject ]</a>
+              <a href="author.html#33">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/xeemes-commits">More information about the Xeemes-commits
+mailing list</a><br>
+</body></html>

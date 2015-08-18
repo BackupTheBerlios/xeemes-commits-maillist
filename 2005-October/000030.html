@@ -1,0 +1,87 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Xeemes-commits] r32 - trunk/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/xeemes-commits/2005-October/index.html" >
+   <LINK REL="made" HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r32%20-%20trunk/src&In-Reply-To=%3C200510302028.j9UKS2GG021542%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000029.html">
+   <LINK REL="Next"  HREF="000031.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Xeemes-commits] r32 - trunk/src</H1>
+    <B>David Frese at BerliOS</B> 
+    <A HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r32%20-%20trunk/src&In-Reply-To=%3C200510302028.j9UKS2GG021542%40sheep.berlios.de%3E"
+       TITLE="[Xeemes-commits] r32 - trunk/src">dfrese at berlios.de
+       </A><BR>
+    <I>Sun Oct 30 21:28:02 CET 2005</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000029.html">[Xeemes-commits] r31 - trunk/src
+</A></li>
+        <LI>Next message: <A HREF="000031.html">[Xeemes-commits] r33 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#30">[ date ]</a>
+              <a href="thread.html#30">[ thread ]</a>
+              <a href="subject.html#30">[ subject ]</a>
+              <a href="author.html#30">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: dfrese
+Date: 2005-10-30 21:28:02 +0100 (Sun, 30 Oct 2005)
+New Revision: 32
+
+Modified:
+   trunk/src/authenticate.inc
+Log:
+Subject: Fixed a bug in dir traversing
+
+
+
+Modified: trunk/src/authenticate.inc
+===================================================================
+--- trunk/src/authenticate.inc	2005-10-30 19:11:44 UTC (rev 31)
++++ trunk/src/authenticate.inc	2005-10-30 20:28:02 UTC (rev 32)
+@@ -25,8 +25,8 @@
+ 
+ function verify_view_authorization($resource) {
+   $edir = dirname($resource-&gt;getLocation());
+-  if ($edir == '/') $edir = '';
+   while (!file_exists(XEEMES_BASE_DIR.'/data'.$edir.'/.htaccess')) {
++    if ($edir == '/') $edir = '';
+     if ($edir == '')
+       return; // no htaccess file found
+     else
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000029.html">[Xeemes-commits] r31 - trunk/src
+</A></li>
+	<LI>Next message: <A HREF="000031.html">[Xeemes-commits] r33 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#30">[ date ]</a>
+              <a href="thread.html#30">[ thread ]</a>
+              <a href="subject.html#30">[ subject ]</a>
+              <a href="author.html#30">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/xeemes-commits">More information about the Xeemes-commits
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,149 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Xeemes-commits] r6 - trunk/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/xeemes-commits/2005-October/index.html" >
+   <LINK REL="made" HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r6%20-%20trunk/src&In-Reply-To=%3C200510041526.j94FQcwg016599%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000003.html">
+   <LINK REL="Next"  HREF="000005.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Xeemes-commits] r6 - trunk/src</H1>
+    <B>David Frese at BerliOS</B> 
+    <A HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r6%20-%20trunk/src&In-Reply-To=%3C200510041526.j94FQcwg016599%40sheep.berlios.de%3E"
+       TITLE="[Xeemes-commits] r6 - trunk/src">dfrese at berlios.de
+       </A><BR>
+    <I>Tue Oct  4 17:26:38 CEST 2005</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000003.html">[Xeemes-commits] r5 - trunk/src
+</A></li>
+        <LI>Next message: <A HREF="000005.html">[Xeemes-commits] r7 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4">[ date ]</a>
+              <a href="thread.html#4">[ thread ]</a>
+              <a href="subject.html#4">[ subject ]</a>
+              <a href="author.html#4">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: dfrese
+Date: 2005-10-04 17:26:38 +0200 (Tue, 04 Oct 2005)
+New Revision: 6
+
+Modified:
+   trunk/src/resources.inc
+Log:
+Subject: Implemented xeemes:xsl-transformation
+
+
+
+Modified: trunk/src/resources.inc
+===================================================================
+--- trunk/src/resources.inc	2005-10-03 20:10:50 UTC (rev 5)
++++ trunk/src/resources.inc	2005-10-04 15:26:38 UTC (rev 6)
+@@ -151,7 +151,7 @@
+   }
+ 
+   function extensions() {
+-    return array('xml');
++    return array('xml', 'xsl');
+   }
+ 
+   function domContent() {
+@@ -171,7 +171,7 @@
+ 
+   function convert_special_tags($doc) {
+     include_resources($doc, $doc-&gt;documentElement, array($this-&gt;location));
+-    replace_special_tags($doc, $doc-&gt;documentElement);
++    replace_special_tags($this, $doc, $doc-&gt;documentElement);
+   }
+ }
+ 
+@@ -299,7 +299,52 @@
+   $oldnode-&gt;parentNode-&gt;removeChild($oldnode);
+ }
+ 
+-function replace_special_tags($doc, $node) {
++function replace_special_tags($resource, $doc, $node) {
++  if ($node-&gt;nodeType == XML_ELEMENT_NODE) {
++    if ($node-&gt;prefix == 'xeemes') {
++      if ($node-&gt;localName == 'xsl-transformation') {
++	$new = replace_xsl_transformation($resource, $doc, $node);
++	replace_node($node, $new);
++      } else {
++	$node-&gt;parentNode-&gt;replaceChild($doc-&gt;createTextNode('Unknown special tag: '.$node-&gt;localName), $node);
++      }
++    } else {
++      foreach (nodelist2array($node-&gt;childNodes) as $child) {
++	replace_special_tags($resource, $doc, $child);
++      }
++    }
++  }
+ }
+ 
++function replace_xsl_transformation($resource, $doc, $node) {
++  // TODO: Error checking
++  // load stylesheet
++  $stylesheet_res = get_resource($node-&gt;getAttribute('stylesheet'), array(),
++				 $resource-&gt;get_location());
++  $stylesheet = new XSLTProcessor();
++  $stylesheet-&gt;importStyleSheet($stylesheet_res-&gt;domContent());
++
++  // find first element node child
++  $docelement = null;
++  foreach (nodelist2array($node-&gt;childNodes) as $child) {
++    if ($child-&gt;nodeType == XML_ELEMENT_NODE) {
++      $docelement = $child;
++      break;
++    }
++  }
++  $doc2 = new DomDocument();
++  $doc2-&gt;appendChild($doc2-&gt;importNode($docelement, true));
++
++  $result_doc = $stylesheet-&gt;transformToDoc($doc2);
++  
++  $result_nodes = array();
++  foreach (nodelist2array($result_doc-&gt;childNodes) as $node) {
++    $result_nodes []= $doc-&gt;importNode($node, true);
++  }
++  return $result_nodes;
++  
++  //return $doc-&gt;importNode($result_doc-&gt;documentElement, true);
++  // TODO: recursive replace special tags?
++}
++
+ ?&gt;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000003.html">[Xeemes-commits] r5 - trunk/src
+</A></li>
+	<LI>Next message: <A HREF="000005.html">[Xeemes-commits] r7 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4">[ date ]</a>
+              <a href="thread.html#4">[ thread ]</a>
+              <a href="subject.html#4">[ subject ]</a>
+              <a href="author.html#4">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/xeemes-commits">More information about the Xeemes-commits
+mailing list</a><br>
+</body></html>

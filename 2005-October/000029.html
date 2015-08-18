@@ -1,0 +1,88 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Xeemes-commits] r31 - trunk/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/xeemes-commits/2005-October/index.html" >
+   <LINK REL="made" HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r31%20-%20trunk/src&In-Reply-To=%3C200510301911.j9UJBkj6021022%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000028.html">
+   <LINK REL="Next"  HREF="000030.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Xeemes-commits] r31 - trunk/src</H1>
+    <B>David Frese at BerliOS</B> 
+    <A HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r31%20-%20trunk/src&In-Reply-To=%3C200510301911.j9UJBkj6021022%40sheep.berlios.de%3E"
+       TITLE="[Xeemes-commits] r31 - trunk/src">dfrese at berlios.de
+       </A><BR>
+    <I>Sun Oct 30 20:11:46 CET 2005</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000028.html">[Xeemes-commits] r30 - trunk/src
+</A></li>
+        <LI>Next message: <A HREF="000030.html">[Xeemes-commits] r32 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#29">[ date ]</a>
+              <a href="thread.html#29">[ thread ]</a>
+              <a href="subject.html#29">[ subject ]</a>
+              <a href="author.html#29">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: dfrese
+Date: 2005-10-30 20:11:44 +0100 (Sun, 30 Oct 2005)
+New Revision: 31
+
+Modified:
+   trunk/src/tags.inc
+Log:
+Subject: Fixed bug in XeemesTag::replaceTags
+
+
+
+Modified: trunk/src/tags.inc
+===================================================================
+--- trunk/src/tags.inc	2005-10-30 17:51:13 UTC (rev 30)
++++ trunk/src/tags.inc	2005-10-30 19:11:44 UTC (rev 31)
+@@ -108,8 +108,9 @@
+       } else {
+ 	$child = $node-&gt;firstChild;
+ 	while ($child) {
++	  $next = $child-&gt;nextSibling;
+ 	  self::replaceTags($resource, $child);
+-	  $child = $child-&gt;nextSibling;
++	  $child = $next;
+ 	}
+ 	//foreach (nodelist2array($node-&gt;childNodes) as $child)
+       }
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000028.html">[Xeemes-commits] r30 - trunk/src
+</A></li>
+	<LI>Next message: <A HREF="000030.html">[Xeemes-commits] r32 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#29">[ date ]</a>
+              <a href="thread.html#29">[ thread ]</a>
+              <a href="subject.html#29">[ subject ]</a>
+              <a href="author.html#29">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/xeemes-commits">More information about the Xeemes-commits
+mailing list</a><br>
+</body></html>

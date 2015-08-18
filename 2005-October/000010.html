@@ -1,0 +1,249 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Xeemes-commits] r12 - trunk/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/xeemes-commits/2005-October/index.html" >
+   <LINK REL="made" HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r12%20-%20trunk/src&In-Reply-To=%3C200510202222.j9KMMDk5025727%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000009.html">
+   <LINK REL="Next"  HREF="000011.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Xeemes-commits] r12 - trunk/src</H1>
+    <B>David Frese at BerliOS</B> 
+    <A HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r12%20-%20trunk/src&In-Reply-To=%3C200510202222.j9KMMDk5025727%40sheep.berlios.de%3E"
+       TITLE="[Xeemes-commits] r12 - trunk/src">dfrese at berlios.de
+       </A><BR>
+    <I>Fri Oct 21 00:22:13 CEST 2005</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000009.html">[Xeemes-commits] r11 - trunk/src
+</A></li>
+        <LI>Next message: <A HREF="000011.html">[Xeemes-commits] r13 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#10">[ date ]</a>
+              <a href="thread.html#10">[ thread ]</a>
+              <a href="subject.html#10">[ subject ]</a>
+              <a href="author.html#10">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: dfrese
+Date: 2005-10-21 00:22:12 +0200 (Fri, 21 Oct 2005)
+New Revision: 12
+
+Modified:
+   trunk/src/resources.inc
+   trunk/src/utils.inc
+   trunk/src/wikipedia.inc
+Log:
+Subject: Implemented possibility to use PHP in HTML-resources
+
+Also moved some things to utils.inc
+
+
+Modified: trunk/src/resources.inc
+===================================================================
+--- trunk/src/resources.inc	2005-10-17 19:34:35 UTC (rev 11)
++++ trunk/src/resources.inc	2005-10-20 22:22:12 UTC (rev 12)
+@@ -34,6 +34,8 @@
+ define('XEEMES_RESOURCE_DATA',      16);
+ define('XEEMES_RESOURCE_WIKIPEDIA', 32);
+ 
++$allow_php = true;
++
+ function get_resource($location, $args, $relation_location = '') {
+   if (substr($location, 0, 1) != '/') {
+     $info = pathinfo($relation_location);
+@@ -167,6 +169,7 @@
+       $layout = new Layout($class, $this-&gt;get_meta('layout-name'));
+       $doc = $layout-&gt;process($doc, array()); // TODO parameters
+     }
++    $this-&gt;process_instructions($doc);
+     $this-&gt;convert_special_tags($doc);
+     // TODO transformations
+     return $doc-&gt;saveXML();
+@@ -175,12 +178,27 @@
+   function convert_special_tags($doc) {
+     replace_special_tags($this, $doc-&gt;documentElement);
+   }
++
++  function process_instructions($doc, $node = false) {
++    global $allow_php;
++    if ($node === false) $node = $doc-&gt;documentElement;
++    if ($node-&gt;nodeType == XML_PI_NODE) {
++      if (($node-&gt;target == 'php') &amp;&amp; $allow_php) {
++	$text = eval_php($node-&gt;data);
++	$nodes = import_html_text($doc, $text);
++	replace_node($node, $nodes);
++      }
++    } else if ($node-&gt;nodeType == XML_ELEMENT_NODE) {
++      foreach (nodelist2array($node-&gt;childNodes) as $child)
++	$this-&gt;process_instructions($doc, $child);
++    }
++  }
+ }
+ 
+ class HTMLResource extends XMLResource {
+   /* convert HTML -&gt; DOM document */
+   function extensions() {
+-    return array('htm', 'html');
++    return array('htm', 'html', 'php');
+   }
+ 
+   function type() {
+@@ -292,15 +310,6 @@
+   return $result;
+ }
+ 
+-function replace_node($oldnode, $newnodes) {
+-  if (!is_array($newnodes))
+-    $newnodes = array($newnodes);
+-  foreach ($newnodes as $child) {
+-    $oldnode-&gt;parentNode-&gt;insertBefore($child, $oldnode);
+-  }
+-  $oldnode-&gt;parentNode-&gt;removeChild($oldnode);
+-}
+-
+ function replace_special_tags($resource, $nodes,
+ 			      $already_included_locations = null) {
+   if (!$already_included_locations)
+
+Modified: trunk/src/utils.inc
+===================================================================
+--- trunk/src/utils.inc	2005-10-17 19:34:35 UTC (rev 11)
++++ trunk/src/utils.inc	2005-10-20 22:22:12 UTC (rev 12)
+@@ -37,4 +37,62 @@
+   define('XEEMES_BASE_DIR', $info2['dirname']);
+ }
+ 
++function strpos_nested($text, $end_str, $start_str, $offset = 0) {
++  do {
++    $end_pos = strpos($text, $end_str, $offset);
++    $start_pos = strpos($text, $start_str, $offset);
++    if ($start_pos === false)
++      return $end_pos;
++    else if ($start_pos &lt; $end_pos) {
++      $rec_pos = strpos_nested($text, $end_str, $start_str,
++			       $start_pos+strlen($start_str));
++      if ($rec_pos === false)
++	return false;
++      else
++	$offset = $rec_pos+strlen($end_str);
++    } else
++      return $end_pos;
++  } while ($offset &lt; strlen($text));
++  return false;
++}
++
++function nodelist2array($nodelist) {
++  $result = array();
++  for ($i = 0; $i &lt; $nodelist-&gt;length; $i++)
++    $result []= $nodelist-&gt;item($i);
++  return $result;
++}
++
++function replace_node($oldnode, $newnodes) {
++  if (!is_array($newnodes))
++    $newnodes = array($newnodes);
++  foreach ($newnodes as $child) {
++    $oldnode-&gt;parentNode-&gt;insertBefore($child, $oldnode);
++  }
++  $oldnode-&gt;parentNode-&gt;removeChild($oldnode);
++}
++
++function eval_php($program) {
++  ob_start();
++  eval($program);
++  $result = ob_get_contents();
++  ob_end_clean();
++  return $result;
++}
++
++function import_html_text($doc, $text) {
++   $xml_text = '&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;'.&quot;\n&quot;.
++    '&lt;doc&gt;'.$text.'&lt;/doc&gt;';
++  $xml = DOMDocument::loadXML($xml_text);
++  if (!$xml) {
++    return array($doc-&gt;createComment('Failed to load text as XML: '), // TODO: Error message?
++		 $doc-&gt;createTextNode($text));
++  } else {
++    $result = array();
++    foreach (nodelist2array($xml-&gt;documentElement-&gt;childNodes) as $ch)
++      $result []= $doc-&gt;importNode($ch);
++    return $result;
++  }
++}
++
+ ?&gt;
+
+Modified: trunk/src/wikipedia.inc
+===================================================================
+--- trunk/src/wikipedia.inc	2005-10-17 19:34:35 UTC (rev 11)
++++ trunk/src/wikipedia.inc	2005-10-20 22:22:12 UTC (rev 12)
+@@ -25,32 +25,8 @@
+ 
+ define('XEEMES_NS_URI', '<A HREF="http://xeemes.org/schema">http://xeemes.org/schema</A>');
+ 
+-function strpos_nested($text, $end_str, $start_str, $offset = 0) {
+-  do {
+-    $end_pos = strpos($text, $end_str, $offset);
+-    $start_pos = strpos($text, $start_str, $offset);
+-    if ($start_pos === false)
+-      return $end_pos;
+-    else if ($start_pos &lt; $end_pos) {
+-      $rec_pos = strpos_nested($text, $end_str, $start_str,
+-			       $start_pos+strlen($start_str));
+-      if ($rec_pos === false)
+-	return false;
+-      else
+-	$offset = $rec_pos+strlen($end_str);
+-    } else
+-      return $end_pos;
+-  } while ($offset &lt; strlen($text));
+-  return false;
+-}
++require_once('utils.inc');
+ 
+-function nodelist2array($nodelist) {
+-  $result = array();
+-  for ($i = 0; $i &lt; $nodelist-&gt;length; $i++)
+-    $result []= $nodelist-&gt;item($i);
+-  return $result;
+-}
+-
+ class WikipediaParser {
+   var $document;
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000009.html">[Xeemes-commits] r11 - trunk/src
+</A></li>
+	<LI>Next message: <A HREF="000011.html">[Xeemes-commits] r13 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#10">[ date ]</a>
+              <a href="thread.html#10">[ thread ]</a>
+              <a href="subject.html#10">[ subject ]</a>
+              <a href="author.html#10">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/xeemes-commits">More information about the Xeemes-commits
+mailing list</a><br>
+</body></html>

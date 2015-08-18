@@ -1,0 +1,267 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Xeemes-commits] r25 - trunk/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/xeemes-commits/2005-October/index.html" >
+   <LINK REL="made" HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r25%20-%20trunk/src&In-Reply-To=%3C200510282117.j9SLHBPM013495%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000022.html">
+   <LINK REL="Next"  HREF="000024.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Xeemes-commits] r25 - trunk/src</H1>
+    <B>David Frese at BerliOS</B> 
+    <A HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r25%20-%20trunk/src&In-Reply-To=%3C200510282117.j9SLHBPM013495%40sheep.berlios.de%3E"
+       TITLE="[Xeemes-commits] r25 - trunk/src">dfrese at berlios.de
+       </A><BR>
+    <I>Fri Oct 28 23:17:11 CEST 2005</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000022.html">[Xeemes-commits] r24 - trunk/src
+</A></li>
+        <LI>Next message: <A HREF="000024.html">[Xeemes-commits] r26 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#23">[ date ]</a>
+              <a href="thread.html#23">[ thread ]</a>
+              <a href="subject.html#23">[ subject ]</a>
+              <a href="author.html#23">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: dfrese
+Date: 2005-10-28 23:17:11 +0200 (Fri, 28 Oct 2005)
+New Revision: 25
+
+Modified:
+   trunk/src/resources.inc
+Log:
+Subject: Added gallery and fixed some resource inclusion code
+
+
+
+Modified: trunk/src/resources.inc
+===================================================================
+--- trunk/src/resources.inc	2005-10-28 21:14:18 UTC (rev 24)
++++ trunk/src/resources.inc	2005-10-28 21:17:11 UTC (rev 25)
+@@ -473,7 +473,7 @@
+ 			   $already_included_locations[0]);
+   $name = $resource-&gt;getName();
+ 
+-  if (in_array($location, $already_included_locations)) {
++  if ($inline &amp;&amp; (in_array($location, $already_included_locations))) {
+     return $doc-&gt;createTextNode('[Error: recursive inclusion of '.
+ 				$location.']');
+   } else {
+@@ -499,8 +499,20 @@
+       }
+     } else if (($type &amp; XEEMES_RESOURCE_IMAGE) &gt; 0) {
+       $img = $doc-&gt;createElement('img');
+-      // TODO args
+-      $img-&gt;setAttribute('src', XEEMES_BASE_URL.'view.php'.$location);
++      $img-&gt;setAttribute('border', '0'); //?? TODO take over attrs?
++      if ($node-&gt;hasAttribute('special')) {
++	$args = array();
++	$special = $node-&gt;getAttribute('special');
++	if ($special == 'thumbnail')
++	  $args['thumbnail'] = '1';
++      }
++      // TODO size, frame, etc.
++      $srcurl = XEEMES_BASE_URL.'view.php'.$location;
++      if (count($args) &gt; 0) $srcurl .= '?';
++      foreach ($args as $name =&gt; $value)
++	// TODO: really htmlspecialchars??
++	$srcurl .= htmlspecialchars($name).'='.htmlspecialchars($value);
++      $img-&gt;setAttribute('src', $srcurl);
+       $result = $img;
+     } else if (($type &amp; XEEMES_RESOURCE_DATA) &gt; 0) {
+       $obj = $doc-&gt;createElement('object');
+@@ -510,12 +522,17 @@
+     }
+   } else {
+     $link = $doc-&gt;createElement('a');
+-    if ($node-&gt;hasChildNodes()) {
++    if ($node-&gt;hasChildNodes()) { // textContent != ''
+       foreach (nodelist2array($node-&gt;childNodes) as $child)
+-	$link-&gt;appendChild($link, $doc-&gt;importNode($child, true));
++	$link-&gt;appendChild($doc-&gt;importNode($child, true)); // TODO
+     } else
+       $link-&gt;appendChild($doc-&gt;createTextNode($name));
+     $link-&gt;setAttribute('href', $resource-&gt;view_url()); // TODO args
++    // TODO: more sophisticated attribute setting, neg./pos. list etc.
++    if ($node-&gt;hasAttribute('class'))
++      $link-&gt;setAttribute('class', $node-&gt;getAttribute('class'));
++    else
++      $link-&gt;setAttribute('class', 'internal');
+     $result = $link;
+   }
+ 
+@@ -533,18 +550,17 @@
+   foreach ($nodes as $node) {
+     if ($node-&gt;nodeType == XML_ELEMENT_NODE) {
+       if ($node-&gt;namespaceURI == XEEMES_NS_URI) {
+-	if ($node-&gt;localName == 'xsl-transformation') {
++	if ($node-&gt;localName == 'xsl-transformation')
+ 	  $new = make_xsl_transformation($resource, $node);
+-	  replace_node($node, $new);
+-	} else if ($node-&gt;localName == 'resource') {
++	else if ($node-&gt;localName == 'gallery')
++	  $new = make_gallery($resource, $node);
++	else if ($node-&gt;localName == 'resource')
+ 	  $new = include_resource($resource, $node,
+ 				  $already_included_locations);
+-	  replace_node($node, $new);
+-	} else {
+-	  $err = $node-&gt;ownerDocument-&gt;createTextNode('Unknown special tag: '.
++	else
++	  $new = $node-&gt;ownerDocument-&gt;createTextNode('Unknown special tag: '.
+ 						      $node-&gt;localName);
+-	  $node-&gt;parentNode-&gt;replaceChild($err, $node);
+-	}
++	replace_node($node, $new);
+       } else {
+ 	foreach (nodelist2array($node-&gt;childNodes) as $child)
+ 	  replace_special_tags($resource, $child, $already_included_locations);
+@@ -585,4 +601,111 @@
+   // TODO: recursive replace special tags?
+ }
+ 
++function make_gallery($resource, $node) {
++  $doc = $node-&gt;ownerDocument;
++  $result = array();
++
++  /* collect images */
++  // TODO: single resources
++  $slocation = $node-&gt;getAttribute('location');
++  $res = get_resource($slocation, array(), $resource-&gt;getLocation()); // TODO: fix dirname and '/' problem
++  if (!$res-&gt;exists())
++    return $doc-&gt;createTextNode('Location not found: '.$res-&gt;getLocation());
++  $location = $res-&gt;getLocation();
++  
++  $locations = find_gallery_locations($location, true);
++
++  if (isset($resource-&gt;args['image'])) {
++    /* view single image */
++    $index = $resource-&gt;args['image'];
++    $res = $doc-&gt;createElementNS(XEEMES_NS_URI, 'resource');
++    $res-&gt;setAttribute('location', $locations[$index]);
++    $res-&gt;setAttribute('display', 'inline');
++
++    $things = include_resource($resource, $res, array());
++    $result = $things;
++
++    $nexti = ($index + 1) % count($locations);
++    $previ = (count($locations) + $index - 1) % count($locations);
++    //... TODO navigation
++  } else {
++    /* overview page */
++    $columns = $node-&gt;hasAttribute('columns') ?
++      $node-&gt;getAttribute('columns') : 6;
++    $per_page = 30;
++    
++    if (isset($resource-&gt;args['page']))
++      $page = $resource-&gt;args['page'];
++    else
++      $page = 0;
++    
++    $num_pages = count($locations)/$per_page;
++    for ($i = 0; $i &lt; $num_pages; $i++) {
++      $lnk = $doc-&gt;createElementNS(XEEMES_NS_URI, 'resource');
++      $lnk-&gt;setAttribute('location', $resource-&gt;getLocation().'?page='.$i);
++      $lnk-&gt;setAttribute('class', 'gallery-link');
++      $lnk-&gt;appendChild($doc-&gt;createTextNode($i+1));
++      $lnk-&gt;appendChild($doc-&gt;createTextNode(' '));
++      $result []= include_resource($ressource, $lnk, array());
++    }
++    
++    $table = $doc-&gt;createElement('table');
++    $i = $page * $per_page;
++    for ($j = 0; $j &lt; (count($locations) / $columns); $j++) {
++      $row = $table-&gt;appendChild($doc-&gt;createElement('tr'));
++      for ($k = 0; $k &lt; $columns; $k++) {
++	$cell = $row-&gt;appendChild($doc-&gt;createElement('td'));
++	
++	$lnk = $doc-&gt;createElementNS(XEEMES_NS_URI, 'resource');
++	$lnk-&gt;setAttribute('location', $resource-&gt;getLocation().'?image='.$i);
++	
++	$res = $doc-&gt;createElementNS(XEEMES_NS_URI, 'resource');
++	$res-&gt;setAttribute('location', $locations[$i]);
++	$res-&gt;setAttribute('display', 'inline');
++	$res-&gt;setAttribute('special', 'thumbnail');
++	
++	$things = include_resource($resource, $res, array());
++	if (!is_array($things)) $things = array($things);
++	foreach ($things as $thing)
++	  $lnk-&gt;appendChild($thing);
++	
++	$things = include_resource($resource, $lnk, array());
++	if (!is_array($things)) $things = array($things);
++	foreach ($things as $thing)
++	  $cell-&gt;appendChild($thing);
++	
++	$i++;
++	if (($i &gt;= count($locations)) || ($i &gt;= (($page + 1)*$per_page)))
++	  break 2;
++      }
++    }
++    $result []= $table;
++  }
++  return $result;
++}
++
++function find_gallery_locations($location, $include_dirs) {
++  global $filesystem_charset;
++  $path = iconv('utf-8', $filesystem_charset, $location);
++  $locations = array();
++  $dir = opendir(XEEMES_BASE_DIR.'/data'.$path);
++  while (($file = readdir($dir)) !== false) {
++    $filename = $path.$file;
++    $pathinfo = pathinfo($filename);
++    if (($file[0] != '.') &amp;&amp;
++	($pathinfo['extension'] != 'meta') &amp;&amp;
++	($file[strlen($file)-1] != '~')) {
++      // TODO: correct encoding of filesystem???
++      if (is_dir(XEEMES_BASE_DIR.'/data'.$filename)) {
++	$filename .= '/';
++	if (!$include_dirs)
++	  continue;
++      }
++      $locations []= iconv($filesystem_charset, 'utf-8', $filename);
++    }
++  }
++  closedir($dir);
++  return $locations;
++}
++
+ ?&gt;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000022.html">[Xeemes-commits] r24 - trunk/src
+</A></li>
+	<LI>Next message: <A HREF="000024.html">[Xeemes-commits] r26 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#23">[ date ]</a>
+              <a href="thread.html#23">[ thread ]</a>
+              <a href="subject.html#23">[ subject ]</a>
+              <a href="author.html#23">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/xeemes-commits">More information about the Xeemes-commits
+mailing list</a><br>
+</body></html>

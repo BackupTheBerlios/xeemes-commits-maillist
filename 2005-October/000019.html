@@ -1,0 +1,207 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Xeemes-commits] r21 - trunk/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/xeemes-commits/2005-October/index.html" >
+   <LINK REL="made" HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r21%20-%20trunk/src&In-Reply-To=%3C200510282051.j9SKpCgg011890%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000018.html">
+   <LINK REL="Next"  HREF="000020.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Xeemes-commits] r21 - trunk/src</H1>
+    <B>David Frese at BerliOS</B> 
+    <A HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r21%20-%20trunk/src&In-Reply-To=%3C200510282051.j9SKpCgg011890%40sheep.berlios.de%3E"
+       TITLE="[Xeemes-commits] r21 - trunk/src">dfrese at berlios.de
+       </A><BR>
+    <I>Fri Oct 28 22:51:12 CEST 2005</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000018.html">[Xeemes-commits] r20 - trunk/src
+</A></li>
+        <LI>Next message: <A HREF="000020.html">[Xeemes-commits] r22 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#19">[ date ]</a>
+              <a href="thread.html#19">[ thread ]</a>
+              <a href="subject.html#19">[ subject ]</a>
+              <a href="author.html#19">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: dfrese
+Date: 2005-10-28 22:51:12 +0200 (Fri, 28 Oct 2005)
+New Revision: 21
+
+Modified:
+   trunk/src/resources.inc
+Log:
+Subject: Extended ImageResource with special classes for jpeg, png, gif
+
+
+
+Modified: trunk/src/resources.inc
+===================================================================
+--- trunk/src/resources.inc	2005-10-27 14:59:09 UTC (rev 20)
++++ trunk/src/resources.inc	2005-10-28 20:51:12 UTC (rev 21)
+@@ -33,6 +33,9 @@
+ define('XEEMES_RESOURCE_HTML',       8);
+ define('XEEMES_RESOURCE_DATA',      16);
+ define('XEEMES_RESOURCE_WIKIPEDIA', 32);
++define('XEEMES_RESOURCE_JPEG',      128);
++define('XEEMES_RESOURCE_PNG',       256);
++define('XEEMES_RESOURCE_GIF',       512);
+ 
+ $allow_php = true;
+ $directory_indices = array('Index', 'index', 'Index.xhtml', 'index.xhtml',
+@@ -60,8 +63,12 @@
+ 
+   $info = pathinfo($location);
+   $ext = strtolower($info['extension']);
+-  if (in_array($ext, ImageResource::extensions()))
+-    return new ImageResource($location, $args);
++  if (in_array($ext, JPEGResource::extensions()))
++    return new JPEGResource($location, $args);
++  else if (in_array($ext, PNGResource::extensions()))
++    return new PNGResource($location, $args);
++  else if (in_array($ext, GIFResource::extensions()))
++    return new GIFResource($location, $args);
+   else if (in_array($ext, DataResource::extensions()))
+     return new DataResource($location, $args);
+   else if (in_array($ext, WikipediaResource::extensions()))
+@@ -283,15 +290,102 @@
+ class ImageResource extends Resource {
+   /* display inline with &lt;img&gt; tag */
+   /* conversions with GD library */
++
++  function type() {
++    return XEEMES_RESOURCE_IMAGE | parent::type();
++  }
++
++  function outputContent() {
++    header('Content-Type: '.$this-&gt;contentType()); // this is abstract
++    // TODO: size args
++    if ($this-&gt;args['thumbnail'] == '1') {
++      $image = $this-&gt;imageContent(); // abstract
++      $ow = imagesx($image); $oh = imagesy($image);
++      $width = 100;
++      $height = 100;
++
++      if ($ow &gt; $oh)
++	$height = $height * $oh / $ow;
++      else
++	$width = $width * $ow / $oh;
++      $thumb = imagecreatetruecolor($width, $height);
++      imagefilledrectangle($thumb, 0, 0, $width, $height, 16777215);
++      imagecopyresampled($thumb, $image, 0, 0, 0, 0, $width, $height, $ow, $oh);
++
++      $this-&gt;outputSameType($thumb); // abstract
++      imagedestroy($thumb);
++      imagedestroy($image);
++    } else
++      parent::outputContent();
++  }
++}
++
++class JPEGResource extends ImageResource {
+   function extensions() {
+-    return array('jpg', 'jpeg', 'png', 'gif');
++    return array('jpeg', 'jpg');
+   }
+ 
+   function type() {
+-    return XEEMES_RESOURCE_IMAGE | parent::type();
++    return XEEMES_RESOURCE_JPEG | parent::type();
+   }
++
++  function imageContent() {
++    return imagecreatefromjpeg($this-&gt;filename);
++  }
++
++  function contentType() {
++    return &quot;image/jpeg&quot;;
++  }
++
++  function outputSameType($image) {
++    imagejpeg($image);
++  }
+ }
+ 
++class PNGResource extends ImageResource {
++  function extensions() {
++    return array('png');
++  }
++
++  function type() {
++    return XEEMES_RESOURCE_PNG | parent::type();
++  }
++
++  function imageContent() {
++    return imagecreatefrompng($this-&gt;filename);
++  }
++
++  function contentType() {
++    return &quot;image/png&quot;;
++  }
++
++  function outputSameType($image) {
++    imagepng($image);
++  }
++}
++
++class GIFResource extends ImageResource {
++  function extensions() {
++    return array('gif');
++  }
++
++  function type() {
++    return XEEMES_RESOURCE_GIF | parent::type();
++  }
++
++  function imageContent() {
++    return imagecreatefromgif($this-&gt;filename);
++  }
++
++  function contentType() {
++    return &quot;image/gif&quot;;
++  }
++
++  function outputSameType($image) {
++    imagegif($image);
++  }
++}
++
+ function include_resource($main_resource, $node,
+ 			  $already_included_locations) {
+   $doc = $node-&gt;ownerDocument;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000018.html">[Xeemes-commits] r20 - trunk/src
+</A></li>
+	<LI>Next message: <A HREF="000020.html">[Xeemes-commits] r22 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#19">[ date ]</a>
+              <a href="thread.html#19">[ thread ]</a>
+              <a href="subject.html#19">[ subject ]</a>
+              <a href="author.html#19">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/xeemes-commits">More information about the Xeemes-commits
+mailing list</a><br>
+</body></html>

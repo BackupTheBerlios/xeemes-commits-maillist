@@ -1,0 +1,158 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Xeemes-commits] r15 - trunk/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/xeemes-commits/2005-October/index.html" >
+   <LINK REL="made" HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r15%20-%20trunk/src&In-Reply-To=%3C200510211944.j9LJibqv025845%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000012.html">
+   <LINK REL="Next"  HREF="000014.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Xeemes-commits] r15 - trunk/src</H1>
+    <B>David Frese at BerliOS</B> 
+    <A HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r15%20-%20trunk/src&In-Reply-To=%3C200510211944.j9LJibqv025845%40sheep.berlios.de%3E"
+       TITLE="[Xeemes-commits] r15 - trunk/src">dfrese at berlios.de
+       </A><BR>
+    <I>Fri Oct 21 21:44:37 CEST 2005</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000012.html">[Xeemes-commits] r14 - trunk/src
+</A></li>
+        <LI>Next message: <A HREF="000014.html">[Xeemes-commits] r16 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#13">[ date ]</a>
+              <a href="thread.html#13">[ thread ]</a>
+              <a href="subject.html#13">[ subject ]</a>
+              <a href="author.html#13">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: dfrese
+Date: 2005-10-21 21:44:37 +0200 (Fri, 21 Oct 2005)
+New Revision: 15
+
+Modified:
+   trunk/src/wikipedia.inc
+Log:
+Subject: Implemented paragraph generation
+
+
+
+Modified: trunk/src/wikipedia.inc
+===================================================================
+--- trunk/src/wikipedia.inc	2005-10-21 19:39:56 UTC (rev 14)
++++ trunk/src/wikipedia.inc	2005-10-21 19:44:37 UTC (rev 15)
+@@ -40,6 +40,7 @@
+ 
+     $this-&gt;process_lines();
+     $this-&gt;process_inliners($this-&gt;document-&gt;documentElement);
++    $this-&gt;process_pbrs();
+     $this-&gt;post_processing();
+ 
+     // header element inside
+@@ -119,13 +120,15 @@
+       $hr = $this-&gt;document-&gt;createElement('hr');
+       $line-&gt;parentNode-&gt;replaceChild($hr, $line);
+       return $hr-&gt;nextSibling;
+-    } else if ($line-&gt;textContent == '') {
++    } else if (!$line-&gt;hasChildNodes()) {
+       $pbr = $this-&gt;document-&gt;createElement('pbr');
+       $line-&gt;parentNode-&gt;replaceChild($pbr, $line);
+       return $pbr-&gt;nextSibling;
+     } else {
+-      foreach (nodelist2array($line-&gt;childNodes) as $child)
++      foreach (nodelist2array($line-&gt;childNodes) as $child) {
++	$line-&gt;removeChild($child);
+ 	$line-&gt;parentNode-&gt;insertBefore($child, $line);
++      }
+       $next = $line-&gt;nextSibling;
+       $line-&gt;parentNode-&gt;removeChild($line);
+       return $next;
+@@ -240,7 +243,7 @@
+   /** */
+   function post_processing($node = null) {
+     if ($node == null) $node = $this-&gt;document-&gt;documentElement;
+-    // TODO: pbr
++
+     if ($node-&gt;nodeType == XML_ELEMENT_NODE) {
+       //if ($node-&gt;namespaceURI == XEEMES_NS_URI) { //?? TODO
+       if ($node-&gt;prefix == 'xeemes') {
+@@ -260,6 +263,45 @@
+     }
+   }
+ 
++  function process_pbrs() {
++    $doc = $this-&gt;document;
++    $parent = $this-&gt;document-&gt;documentElement-&gt;firstChild;
++
++    $blocklevel_elements = array('ADDRESS', 'BLOCKQUOTE', 'CENTER', 'DIR', 
++				 'DIV', 'DL', 'FIELDSET', 'FORM', 'H1', 'H2', 
++				 'H3', 'H4', 'H5', 'H6', 'HR', 'ISINDEX', 
++				 'MENU', 'NOFRAMES', 'NOSCRIPT', 'OL', 'P', 
++				 'PRE', 'TABLE', 'UL',
++				 // The following elements may also be
++				 // considered block-level elements
++				 // since they may contain block-level
++				 // elements:
++				 'DD', 'DT', 'FRAMESET', 'LI', 'TBODY', 'TD', 
++				 'TFOOT', 'TH', 'THEAD', 'TR');
++    $stack = array();
++    foreach (nodelist2array($parent-&gt;childNodes) as $node) {
++      if ($node-&gt;nodeType == XML_ELEMENT_NODE) {
++	if ($node-&gt;nodeName == 'pbr') {
++	  if (count($stack) &gt; 0) {
++	    $p_element = $doc-&gt;createElement('p');
++	    foreach ($stack as $thing) {
++	      $parent-&gt;removeChild($thing);
++	      $p_element-&gt;appendChild($thing);
++	    }
++	    $parent-&gt;replaceChild($p_element, $node);
++	    $stack = array();
++	  } else
++	    $parent-&gt;removeChild($node);
++	} else if (in_array(strtoupper($node-&gt;nodeName),
++			    $blocklevel_elements)) {
++	  $stack = array();
++	} else
++	  $stack []= $node;
++      } else
++	$stack []= $node;
++    }
++  }
++
+   /** input: a xeemes:resource1 node, containing text nodes and other tags
+    *  is replaced by a xeemes:resource with appropriate attributes and content
+    */
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000012.html">[Xeemes-commits] r14 - trunk/src
+</A></li>
+	<LI>Next message: <A HREF="000014.html">[Xeemes-commits] r16 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#13">[ date ]</a>
+              <a href="thread.html#13">[ thread ]</a>
+              <a href="subject.html#13">[ subject ]</a>
+              <a href="author.html#13">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/xeemes-commits">More information about the Xeemes-commits
+mailing list</a><br>
+</body></html>

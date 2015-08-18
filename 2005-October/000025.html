@@ -1,0 +1,416 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Xeemes-commits] r27 - in trunk: . src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/xeemes-commits/2005-October/index.html" >
+   <LINK REL="made" HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r27%20-%20in%20trunk%3A%20.%20src&In-Reply-To=%3C200510282122.j9SLM9CK013829%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000024.html">
+   <LINK REL="Next"  HREF="000026.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Xeemes-commits] r27 - in trunk: . src</H1>
+    <B>David Frese at BerliOS</B> 
+    <A HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r27%20-%20in%20trunk%3A%20.%20src&In-Reply-To=%3C200510282122.j9SLM9CK013829%40sheep.berlios.de%3E"
+       TITLE="[Xeemes-commits] r27 - in trunk: . src">dfrese at berlios.de
+       </A><BR>
+    <I>Fri Oct 28 23:22:09 CEST 2005</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000024.html">[Xeemes-commits] r26 - trunk/src
+</A></li>
+        <LI>Next message: <A HREF="000026.html">[Xeemes-commits] r28 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#25">[ date ]</a>
+              <a href="thread.html#25">[ thread ]</a>
+              <a href="subject.html#25">[ subject ]</a>
+              <a href="author.html#25">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: dfrese
+Date: 2005-10-28 23:22:08 +0200 (Fri, 28 Oct 2005)
+New Revision: 27
+
+Modified:
+   trunk/src/authenticate.inc
+   trunk/view.php
+Log:
+Subject: Implemented basic authentication support
+
+
+
+Modified: trunk/src/authenticate.inc
+===================================================================
+--- trunk/src/authenticate.inc	2005-10-28 21:20:17 UTC (rev 26)
++++ trunk/src/authenticate.inc	2005-10-28 21:22:08 UTC (rev 27)
+@@ -24,7 +24,301 @@
+  */
+ 
+ function verify_view_authorization($resource) {
+-  // TODO
++  $edir = dirname($resource-&gt;getLocation());
++  if ($edir == '/') $edir = '';
++  while (!file_exists(XEEMES_BASE_DIR.'/data'.$edir.'/.htaccess')) {
++    if ($edir == '')
++      return; // no htaccess file found
++    else
++      $edir = dirname($edir);
++  }
++  $htaccess = new htaccess(XEEMES_BASE_DIR.'/data'.$edir.'/.htaccess');
++  $htaccess-&gt;load();
++
++  // see if authorization is required
++  $require = $htaccess-&gt;getRequire();
++  if ($require == null)
++    return;
++
++  // check passed headers
++  if (isset($_SERVER['PHP_AUTH_USER'])) {
++    $htpasswd = $htaccess-&gt;getAuthUserFile();
++    $htpasswd-&gt;load();
++    $htgroups = $htaccess-&gt;getAuthGroupFile();
++
++    /*$str = base64_decode($_SERVER['HTTP_AUTHORIZATION']);
++    $pos = strpos($str, ':');
++    $user = substr($str, 0, $pos);
++    $pw = substr($str, $pos+1);*/
++    $user = $_SERVER['PHP_AUTH_USER'];
++    $pw = $_SERVER['PHP_AUTH_PW'];
++
++    if (($htpasswd-&gt;validUser($user, $pw)) &amp;&amp;
++	( ($require[0] == HTACCESS_REQUIRE_VALID_USER) ||
++	  (($require[0] == HTACCESS_REQUIRE_USER) &amp;&amp;
++	   in_array($user, $require[1])) ||
++	  ((($htgroups-&gt;load() || true) &amp;&amp;
++	    ($require[0] == HTACCESS_REQUIRE_GROUP) &amp;&amp;
++	    in_array($user, $htgroups-&gt;getGroup($require[1]))) )))
++      // OK
++      return;
++  }
++  
++  // send need for authorization requirement
++  if ($htaccess-&gt;getAuthType() == HTACCESS_AUTHTYPE_BASIC) {
++    header('HTTP/1.1 401 Unauthorized');
++    $realm = $htaccess-&gt;getAuthName(); // TODO: quote
++    header('WWW-Authenticate: Basic realm=&quot;'.$realm.'&quot;');
++    exit();
++  } else {
++    // TODO: internal error: type not supported
++    return;
++  }
+ }
+ 
++function read_lines($fh) {
++  $lines = array();
++  while (!feof($fh)) {
++    $str = trim(fgets($fh));
++    if ($str != '') $lines []= $str;
++  }
++  return $lines;
++}
++
++function write_lines($fh, $lines) {
++  foreach ($lines as $line)
++    fputs($fh, $line.&quot;\n&quot;);
++}
++
++define('HTACCESS_AUTHTYPE_BASIC', 1);
++
++define('HTACCESS_REQUIRE_VALID_USER', 1);
++define('HTACCESS_REQUIRE_USER', 2);
++define('HTACCESS_REQUIRE_GROUP', 3);
++
++class htaccess {
++  var $filename;
++  var $lines;
++
++  function htaccess ($filename) {
++    $this-&gt;filename = $filename;
++  }
++
++  function load() {
++    $fh = fopen($this-&gt;filename, 'r');
++    $this-&gt;lines = read_lines($fh);
++    fclose($fh);
++  }
++
++  function save() {
++    $fh = fopen($this-&gt;filename, 'w'); // TODO chmod if create
++    write_lines($fh, $this-&gt;lines);
++    fclose($fh);
++  }
++
++  function getThing($regexp) {
++    foreach ($this-&gt;lines as $line) {
++      if (preg_match($regexp, $line, $matches))
++	return $matches;
++    }
++    return null;
++  }
++
++  function setThing($regexp, $value) {
++    for ($i = 0; $i &lt; count($this-&gt;lines); $i++) {
++      if (preg_match($regexp, $this-&gt;lines[$i])) {
++	$this-&gt;lines[$i] = $value;
++	return;
++      }
++    }
++    $this-&gt;lines []= $value;
++  }
++
++  function getAuthType() {
++    $matches = $this-&gt;getThing('/^authtype\s(.*)/i');
++    if ($matches) {
++      if (strcasecmp($matches[1], 'Basic') == 0)
++	return HTACCESS_AUTHTYPE_BASIC;
++      else
++	return $matches[1];
++    } else
++      return null;
++  }
++
++  function setAuthType($value) {
++    if ($value == HTACCESS_AUTHTYPE_BASIC)
++      $value = 'Basic';
++    $this-&gt;setThing('/^authtype\s(.*)/i', 'AuthType '.$value);
++  }
++
++  function getAuthName() {
++    $matches = $this-&gt;getThing('/^authname\s(.*)/i');
++    if ($matches)
++      return $matches[1];
++    else
++      return null;
++  }
++
++  function setAuthName($value) {
++    $this-&gt;setThing('/^authname\s(.*)/i', 'AuthName '.$value);
++  }
++
++  function getAuthUserFile() {
++    $matches = $this-&gt;getThing('/^authuserfile\s(.*)/i');
++    if ($matches) {
++      $file = $matches[1];
++      if ($file[0] != '/')
++	$file = dirname($this-&gt;filename).'/'.$file;
++      return new htpasswd($file);
++    } else
++      return null;
++  }
++
++  function setAuthUserFile($value) {
++    // TODO: preserve relative/absolute paths
++    $fname = $value-&gt;filename;
++    $this-&gt;setThing('/^authuserfile\s(.*)/i', $fname);
++  }
++
++  function getAuthGroupFile() {
++    $matches = $this-&gt;getThing('/^authgroupfile\s(.*)/i');
++    if ($matches) {
++      $file = $matches[1];
++      if ($file[0] != '/')
++	$file = dirname($this-&gt;filename).'/'.$file;
++      return new htpasswd($file);
++    } else
++      return null;
++  }
++
++  function setAuthGroupFile($value) {
++    $fname = $value-&gt;filename;
++    $this-&gt;setThing('/^authgroupfile\s(.*)/i', $fname);
++  }
++
++  function getRequire() {
++    $matches = $this-&gt;getThing('/^require\s([\S]*)\s?(.*)/i');
++    if ($matches) {
++      $typen = $matches[1];
++      $more = preg_split('/[\s]+/', $matches[2]);
++      if (strcasecmp($typen, 'valid-user') == 0)
++	return array(HTACCESS_REQUIRE_VALID_USER, null);
++      else if (strcasecmp($typen, 'user') == 0)
++	return array(HTACCESS_REQUIRE_USER, $more);
++      else if (strcasecmp($typen, 'group') == 0)
++	return array(HTACCESS_REQUIRE_GROUP, $more);
++      else
++	return array($typen, $matches[2]);
++    } else
++      return null;
++  }
++
++  function setRequire($type, $names = array()) {
++    if ($type == HTACCESS_REQUIRE_VALID_USER)
++      $value = 'require valid-user';
++    else if ($type == HTACCESS_REQUIRE_USER)
++      $value = 'require user '.implode(' ', $names);
++    else if ($type == HTACCESS_REQUIRE_GROUP)
++      $value = 'require group '.implode(' ', $names);
++    else
++      $value = 'require '.$type.' '.$names; // TODO: array?
++    $this-&gt;setThing('/^require\s([\S]*)\s?(.*)/i', $value);
++  }
++}
++
++class htpasswd {
++  var $filename;
++  var $lines;
++
++  function htpasswd($filename) {
++    $this-&gt;filename = $filename;
++  }
++
++  function load() {
++    $fh = fopen($this-&gt;filename, 'r');
++    $this-&gt;lines = read_lines($fh);
++    fclose($fh);
++  }
++
++  function save() {
++    $fh = fopen($this-&gt;filename, 'w'); // TODO chmod if create
++    write_lines($fh, $this-&gt;lines);
++    fclose($fh);
++  }
++
++  function validUser($user, $password) {
++    foreach ($this-&gt;lines as $line) {
++      if (preg_match('/^'.preg_quote($user).':(.*)/', $line, $matches))
++	return (crypt($password, substr($matches[1], 0, 2)) == $matches[1]);
++    }
++    return false;
++  }
++
++  function setUser($user, $password) {
++    $str = $user.':'.crypt($password, 'ab'); // TODO: create salt randomly
++    for ($i = 0; $i &lt; count($this-&gt;lines); $i++) {
++      $line = $this-&gt;lines[$i];
++      if (preg_match('/^'.preg_quote($user).':.*/', $line)) {
++	$this-&gt;lines[$i] = $str;
++	return;
++      }
++    }
++    $this-&gt;lines []= $str;
++  }
++}
++
++class htgroupfile {
++  var $filename;
++
++  // TODO: is whitespace after ':' needed/checked/inserted?
++
++  function htpasswd($filename) {
++    $this-&gt;filename = $filename;
++  }
++
++  function load() {
++    $fh = fopen($this-&gt;filename, 'r');
++    $this-&gt;lines = read_lines($fh);
++    fclose($fh);
++  }
++
++  function save() {
++    $fh = fopen($this-&gt;filename, 'w'); // TODO chmod if create
++    write_lines($fh, $this-&gt;lines);
++    fclose($fh);
++  }
++
++  function getGroups() {
++    $result = array();
++    foreach ($this-&gt;lines as $line) {
++      if (preg_match('/^([^:]+):.*/', $line, $matches))
++	$result []= $matches[1];
++      // TODO else syntax error/comment
++    }
++    return $result;
++  }
++
++  function getGroup($name) {
++    foreach ($this-&gt;lines as $line) {
++      if (preg_match('/^'.preg_quote($name).':(.*)/', $line, $matches)) {
++	$users = preg_split('/[\s]+/', $matches[1]);
++	return $users;
++      }
++    }
++    return null;
++  }
++
++  function setGroup($name, $users) {
++    $str = $name.':'.implode(' ', $users);
++    for ($i = 0; $i &lt; count($this-&gt;lines); $i++) {
++      $line = $this-&gt;lines[$i];
++      if (preg_match('/^'.preg_quote($name).':.*/', $line)) {
++	$this-&gt;lines[$i] = $str;
++	return;
++      }
++    }
++    $this-&gt;lines []= $str;
++  }
++}
++
+ ?&gt;
+
+Modified: trunk/view.php
+===================================================================
+--- trunk/view.php	2005-10-28 21:20:17 UTC (rev 26)
++++ trunk/view.php	2005-10-28 21:22:08 UTC (rev 27)
+@@ -27,15 +27,21 @@
+ define_globals(0);
+ 
+ require_once('src/resources.inc');
++require_once('src/authenticate.inc');
+ 
+ function view($location, $args) {
+   $resource = get_resource($location, $args);
++
++  verify_view_authorization($resource);
++
+   global $xeemes_current_resource;
+   $xeemes_current_resource = $resource;
+   if (($resource-&gt;type() &amp; XEEMES_RESOURCE_XML) &gt; 0) {
+     if (!$resource-&gt;exists()) {
++      header('HTTP/1.1 404 Not found');
+       print('&lt;html&gt;&lt;body&gt;404 - not found&lt;/body&gt;&lt;/html&gt;'); // TODO
+     } else {
++      header('Content-Type: text/html; charset=utf-8');
+       print($resource-&gt;xmlContent());
+     }
+   } else {
+@@ -48,6 +54,6 @@
+   }
+ }
+ 
+-view($_SERVER['PATH_INFO'], $_SERVER['argv']);
++view($_SERVER['PATH_INFO'], $_GET);
+ 
+ ?&gt;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000024.html">[Xeemes-commits] r26 - trunk/src
+</A></li>
+	<LI>Next message: <A HREF="000026.html">[Xeemes-commits] r28 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#25">[ date ]</a>
+              <a href="thread.html#25">[ thread ]</a>
+              <a href="subject.html#25">[ subject ]</a>
+              <a href="author.html#25">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/xeemes-commits">More information about the Xeemes-commits
+mailing list</a><br>
+</body></html>

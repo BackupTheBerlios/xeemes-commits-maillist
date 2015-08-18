@@ -1,0 +1,967 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Xeemes-commits] r2 - in trunk: . src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/xeemes-commits/2005-September/index.html" >
+   <LINK REL="made" HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r2%20-%20in%20trunk%3A%20.%20src&In-Reply-To=%3C200509252132.j8PLW3tE004002%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   
+   
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Xeemes-commits] r2 - in trunk: . src</H1>
+    <B>David Frese at BerliOS</B> 
+    <A HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r2%20-%20in%20trunk%3A%20.%20src&In-Reply-To=%3C200509252132.j8PLW3tE004002%40sheep.berlios.de%3E"
+       TITLE="[Xeemes-commits] r2 - in trunk: . src">dfrese at berlios.de
+       </A><BR>
+    <I>Sun Sep 25 23:32:03 CEST 2005</I>
+    <P><UL>
+        
+        
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#0">[ date ]</a>
+              <a href="thread.html#0">[ thread ]</a>
+              <a href="subject.html#0">[ subject ]</a>
+              <a href="author.html#0">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: dfrese
+Date: 2005-09-25 23:32:02 +0200 (Sun, 25 Sep 2005)
+New Revision: 2
+
+Added:
+   trunk/src/
+   trunk/src/meta.inc
+   trunk/src/resources.inc
+   trunk/src/transformation.inc
+   trunk/src/utils.inc
+   trunk/src/wikipedia.inc
+   trunk/view.php
+Log:
+Subject: Initial commit
+
+
+
+Added: trunk/src/meta.inc
+===================================================================
+--- trunk/src/meta.inc	2005-09-04 15:46:22 UTC (rev 1)
++++ trunk/src/meta.inc	2005-09-25 21:32:02 UTC (rev 2)
+@@ -0,0 +1,71 @@
++&lt;?php
++/*
++ * meta.inc - load and save arbitrary meta data
++ * Copyright (c) 2005 David Frese
++ */
++
++/*
++ * This file is part of Xeemes.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2, or (at your option)
++ * any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; see the file COPYING.  If not, write to
++ * the Free Software Foundation, 59 Temple Place - Suite 330,
++ * Boston, MA 02111-1307, USA.
++ */
++
++function load_meta_data($filename) {
++  $doc = domxml_open_file($filename);
++  $root = $doc-&gt;document_element();
++  $result = get_meta_data_entry($root);
++  return $result;
++}
++
++function get_meta_data_entry($node) {
++  $entry = false;
++  foreach ($node-&gt;child_nodes() as $child) {
++    if ($child-&gt;node_type() == XML_ELEMENT_NODE) {
++      if (!is_array($entry)) $entry = array();
++      $entry[$child-&gt;node_name()] = get_meta_data_entry($child);
++    }
++  }
++  if (!$entry)
++    $entry = $node-&gt;get_content();
++  return $entry;
++}
++
++function save_meta_data($filename, $data) {
++  $doc = domxml_new_doc('1.0');
++  $doc-&gt;append_child(make_meta_data($doc, 'meta-data', $data));
++  $doc-&gt;dump_file($filename, false, true);
++}
++
++function make_meta_data($doc, $name, $entry, $id = false) {
++  $node = $doc-&gt;create_element($name);
++  if (is_array($entry)) {
++    foreach ($entry as $subname =&gt; $subentry) {
++      $this_id = $id;
++      if ($id) $down_id = $id.'00'; else $down_id = false;
++      $d = make_meta_data($doc, $subname, $subentry, $down_id);
++      if ($id) {
++	$d-&gt;append_child($doc-&gt;create_attribute('id', $id));
++	$id = $id+1;
++      }
++      $node-&gt;append_child($d);
++    }
++  } else {
++    $node-&gt;append_child($doc-&gt;create_text_node($entry));
++  }
++  return $node;
++}
++
++?&gt;
+
+Added: trunk/src/resources.inc
+===================================================================
+--- trunk/src/resources.inc	2005-09-04 15:46:22 UTC (rev 1)
++++ trunk/src/resources.inc	2005-09-25 21:32:02 UTC (rev 2)
+@@ -0,0 +1,294 @@
++&lt;?php
++/*
++ * resources.inc - provides access to the resources of the site
++ * Copyright (c) 2005 David Frese
++ */
++
++/*
++ * This file is part of Xeemes.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2, or (at your option)
++ * any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; see the file COPYING.  If not, write to
++ * the Free Software Foundation, 59 Temple Place - Suite 330,
++ * Boston, MA 02111-1307, USA.
++ */
++
++require_once('transformation.inc');
++require_once('wikipedia.inc');
++
++define('XEEMES_RESOURCE_UNKNOWN',    1);
++define('XEEMES_RESOURCE_XML',        2);
++define('XEEMES_RESOURCE_IMAGE',      4);
++define('XEEMES_RESOURCE_HTML',       8);
++define('XEEMES_RESOURCE_DATA',      16);
++define('XEEMES_RESOURCE_WIKIPEDIA', 32);
++
++function get_resource($location, $args, $relation_location = '') {
++  if (substr($location, 0, 1) != '/') {
++    $info = pathinfo($relation_location);
++    if ($info['dirname'] == '/') $info['dirname'] = '';
++    $location = $info['dirname'].'/'.$location;
++  }
++  $info = pathinfo($location);
++  $ext = strtolower($info['extension']);
++  if (in_array($ext, ImageResource::extensions()))
++    return new ImageResource($location, $args);
++  else if (in_array($ext, DataResource::extensions()))
++    return new DataResource($location, $args);
++  else if (in_array($ext, WikipediaResource::extensions()))
++    return new WikipediaResource($location, $args);
++  else if (in_array($ext, HTMLResource::extensions()))
++    return new HTMLResource($location, $args);
++  else if (in_array($ext, XMLResource::extensions()))
++    return new XMLResource($location, $args);
++  else
++    return new Resource($location, $args);
++}
++
++class Resource {
++  /* location */
++  /* meta data */
++  /* content */
++  var $location;
++  var $meta_data;
++
++  var $filename;
++  var $meta_filename;
++
++  function Resource ($location, $args) {
++    $this-&gt;location = $location;
++    $this-&gt;meta_data = null;
++
++    $this-&gt;filename = XEEMES_BASE_DIR.'/data'.$location; // TODO illegal chars
++    $this-&gt;meta_filename = $this-&gt;filename.'.meta';
++  }
++
++  function type() {
++    return XEEMES_RESOURCE_UNKNOWN;
++  }
++
++  function url() {
++    return XEEMES_BASE_URL.'data'.$this-&gt;location; // TODO illegal chars, encoding
++  }
++
++  function view_url() {
++    return XEEMES_BASE_URL.'view.php'.$this-&gt;location;
++  }
++
++  function extensions() {
++    return array();
++  }
++
++  function get_meta($name) {
++    $this-&gt;maybe_load_meta();
++    return $this-&gt;meta_data[$name];
++  }
++
++  function set_meta($name, $value) {
++    $this-&gt;save_meta();
++  }
++
++  function maybe_load_meta() {
++    if ($meta_data == null)
++      if (file_exists($this-&gt;meta_filename))
++	$meta_data = load_meta_data($this-&gt;meta_filename);
++      else
++	$this-&gt;meta_data = array();
++  }
++
++  function save_meta() {
++    save_meta_data($this-&gt;meta_filename, $this-&gt;meta_data);
++  }
++
++  function exists() {
++    return file_exists($this-&gt;filename);
++  }
++
++  function stringContent() {
++    return file_get_contents($this-&gt;filename);
++  }
++
++  function original() {
++    return true;
++  }
++
++  function get_location() {
++    return $this-&gt;location;
++  }
++
++}
++
++// TODO: maybe move inline-code into classes
++
++class XMLResource extends Resource {
++  /* DOM document */
++  /* apply transformation */
++  /* apply layout */
++  /* convert xeemes tags */
++  /* display inline (prevent mutual inclusions) */
++
++  function type() {
++    return XEEMES_RESOURCE_XML | parent::type();
++  }
++
++  function extensions() {
++    return array('xml');
++  }
++
++  function domContent() {
++    return DOMDocument::load($this-&gt;filename);
++  }
++
++  function xmlContent() {
++    $doc = $this-&gt;domContent();
++    if ($this-&gt;get_meta('layout')) {
++      $layout = new Layout($this-&gt;get_meta('layout')); // class:name?
++      $doc = $layout-&gt;process($doc, array()); // TODO parameters
++    }
++    $this-&gt;convert_special_tags($doc); // TODO prevent mutual incs
++    // TODO transformations
++    return $doc-&gt;saveXML();
++  }
++
++  function convert_special_tags($doc) {
++    include_resources($doc, $doc-&gt;documentElement, array($this-&gt;location));
++    replace_special_tags($doc, $doc-&gt;documentElement);
++  }
++}
++
++class HTMLResource extends XMLResource {
++  /* convert HTML -&gt; DOM document */
++  function extensions() {
++    return array('htm', 'html');
++  }
++
++  function type() {
++    return XEEMES_RESOURCE_HTML | parent::type();
++  }
++}
++
++class WikipediaResource extends XMLResource {
++  /* convert Wikitext -&gt; DOM document */
++  function extensions() {
++    return array('', 'wiki');
++  }
++
++  function type() {
++    return XEEMES_RESOURCE_WIKIPEDIA | parent::type();
++  }
++
++  function domContent() {
++    $parser = new WikipediaParser();
++    return $parser-&gt;parse($this-&gt;stringContent());
++  }
++}
++
++class DataResource extends Resource {
++  /* display inline with &lt;object&gt; tag */
++  function extensions() {
++    return array('mpg', 'mpeg', 'avi', 'wmv');
++  }
++
++  function type() {
++    return XEEMES_RESOURCE_DATA | parent::type();
++  }
++}
++
++class ImageResource extends Resource {
++  /* display inline with &lt;img&gt; tag */
++  /* conversions with GD library */
++  function extensions() {
++    return array('jpg', 'jpeg', 'png', 'gif');
++  }
++
++  function type() {
++    return XEEMES_RESOURCE_IMAGE | parent::type();
++  }
++}
++
++function include_resources($doc, $node, $already_included_locations) {
++  if ($node-&gt;nodeType == XML_ELEMENT_NODE) {
++    if ($node-&gt;nodeName == 'xeemes:resource') {
++      $location = $node-&gt;attributes-&gt;getNamedItem('location')-&gt;nodeValue;
++      $name = $location;
++      // TODO: args: location, thumbnail, size, frame
++      $args = array();
++
++      $display_n = $node-&gt;attributes-&gt;getNamedItem('display');
++      $inline = $display_n &amp;&amp; $display_n-&gt;nodeValue;
++      $resource = get_resource($location, $args,
++			       $already_included_locations[0]);
++      if (in_array($location, $already_included_locations)) {
++	replace_node($node,
++		     $doc-&gt;createTextNode('[Error: recursive '.
++					  'inclusion of '.$location.']'));
++	return;
++      } else {
++	$location = $resource-&gt;get_location();
++	array_unshift($already_included_locations, $location);
++      }
++      $type = $resource-&gt;type();
++      if ($inline) {
++	if (($type &amp; XEEMES_RESOURCE_XML) &gt; 0) {
++	  if ($resource-&gt;exists()) {
++	    $incl_doc = $resource-&gt;domContent();
++	    $incl_node = $doc-&gt;importNode($incl_doc-&gt;documentElement, true);
++	    $bodies = $incl_node-&gt;getElementsByTagName('body');
++	    replace_node($node, nodelist2array($bodies-&gt;item(0)-&gt;childNodes));
++	  } else {
++	    replace_node($node, $doc-&gt;createTextNode('['.$location.
++						     ' Not found]'));
++	  }
++	} else if (($type &amp; XEEMES_RESOURCE_IMAGE) &gt; 0) {
++	  $img = $doc-&gt;createElement('img');
++	  // TODO args
++	  $img-&gt;setAttribute('src', XEEMES_BASE_URL.'view.php'.$location);
++	  replace_node($node, $img);
++	} else if (($type &amp; XEEMES_RESOURCE_DATA) &gt; 0) {
++	  $obj = $doc-&gt;createElement('object');
++	  $obj-&gt;setAttribute('data', XEEMES_BASE_URL.'data/'.$location);
++	  // TODO type, args
++	}
++      } else {
++	$a = $doc-&gt;createElement('a');
++	if ($node-&gt;hasChildNodes()) {
++	  foreach (nodelist2array($node-&gt;childNodes) as $child)
++	    $a-&gt;appendChild($a, $doc-&gt;importNode($child, true));
++	} else
++	  $a-&gt;appendChild($doc-&gt;createTextNode($name));
++	$a-&gt;setAttribute('href', $resource-&gt;view_url()); // TODO args
++	replace_node($node, $a);
++      }
++    }
++    $child = $node-&gt;firstChild;
++    while ($child) {
++      $next = $child-&gt;nextSibling;
++      include_resources($doc, $child, $already_included_locations);
++      $child = $next;
++    }
++  }
++}
++
++function replace_node($oldnode, $newnodes) {
++  if (!is_array($newnodes))
++    $newnodes = array($newnodes);
++  foreach ($newnodes as $child) {
++    $oldnode-&gt;parentNode-&gt;insertBefore($child, $oldnode);
++  }
++  $oldnode-&gt;parentNode-&gt;removeChild($oldnode);
++}
++
++function replace_special_tags($doc, $node) {
++}
++
++?&gt;
+
+Added: trunk/src/transformation.inc
+===================================================================
+--- trunk/src/transformation.inc	2005-09-04 15:46:22 UTC (rev 1)
++++ trunk/src/transformation.inc	2005-09-25 21:32:02 UTC (rev 2)
+@@ -0,0 +1,87 @@
++&lt;?php
++/*
++ * transformation.inc - wrappers for style and layout transformations
++ * Copyright (c) 2005 David Frese
++ */
++
++/*
++ * This file is part of Xeemes.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2, or (at your option)
++ * any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; see the file COPYING.  If not, write to
++ * the Free Software Foundation, 59 Temple Place - Suite 330,
++ * Boston, MA 02111-1307, USA.
++ */
++
++class Transformation {
++  var $document;
++  var $parameters;
++
++  function Transformation ($name) {
++    $filename = XEEMES_BASE_DIR.'/styles/'.$name;
++    $this-&gt;document = DOMDocument::load($filename);
++    $this-&gt;parameters = array();
++  }
++
++  function process($doc, $parameters) {
++    $proc = new XSLTProcessor();
++    $proc-&gt;importStyleSheet($this-&gt;document);
++    foreach ($this-&gt;parameters as $name =&gt; $value)
++      $proc-&gt;setParameter('', $name, $value);
++    foreach ($parameters as $name =&gt; $value)
++      $proc-&gt;setParameter('', $name, $value);
++    //$proc-&gt;registerPHPFunctions(); (restrict-array) &gt;=PHP-5.1.0
++    return $proc-&gt;transformToDoc($doc-&gt;documentElement);
++  }
++}
++
++class Layout extends Transformation {
++  function Layout ($class, $name) {
++    $logic_filename = XEEMES_BASE_DIR.'/layouts/'.$class.'.xsl';
++    $layout_dir = '/layouts/'.$class.'/'.$name;
++    $layout_filename = XEEMES_BASE_DIR.$layout_dir.'.xml';
++    $this-&gt;document = DOMDocument::load($logic_filename);
++    $this-&gt;parameters['layout-filename'] = $layout_filename;
++  }
++}
++
++/*
++function make_layout_logic($filename) {
++  // TODO quote filename
++  $xsl = '&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;
++&lt;xsl:stylesheet xmlns:xsl=&quot;<A HREF="http://www.w3.org/1999/XSL/Transform">http://www.w3.org/1999/XSL/Transform</A>&quot;&gt;
++&lt;xsl:variable name=&quot;page&quot; select=&quot;/&quot;/&gt;
++&lt;xsl:variable name=&quot;layout&quot; select=&quot;document(\''.$filename.'\')&quot;/&gt;
++&lt;xsl:template match=&quot;/&quot;&gt;
++    &lt;xsl:apply-templates select=&quot;$layout/html&quot;/&gt;
++&lt;/xsl:template&gt;
++&lt;xsl:template match=&quot;insert-head&quot;&gt;
++    &lt;!-- Get the head values here... --&gt;
++    &lt;xsl:apply-templates select=&quot;$page/html/head/*&quot;/&gt;
++&lt;/xsl:template&gt;
++&lt;xsl:template match=&quot;insert-body&quot;&gt;
++    &lt;!-- Get the body here --&gt;
++    &lt;xsl:apply-templates select=&quot;$page/html/body/*&quot;/&gt;
++&lt;/xsl:template&gt;
++&lt;!-- Identity transformation --&gt;
++&lt;xsl:template match=&quot;@*|*&quot;&gt;
++    &lt;xsl:copy&gt;
++        &lt;xsl:apply-templates select=&quot;@*|node()&quot;/&gt;
++    &lt;/xsl:copy&gt;
++&lt;/xsl:template&gt;
++&lt;/xsl:stylesheet&gt;';
++  return DOMDocument::loadXML($xsl);
++}
++*/
++
++?&gt;
+
+Added: trunk/src/utils.inc
+===================================================================
+--- trunk/src/utils.inc	2005-09-04 15:46:22 UTC (rev 1)
++++ trunk/src/utils.inc	2005-09-25 21:32:02 UTC (rev 2)
+@@ -0,0 +1,40 @@
++&lt;?php
++/*
++ * utils.inc - various independent utilities
++ * Copyright (c) 2005 David Frese
++ */
++
++/*
++ * This file is part of Xeemes.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2, or (at your option)
++ * any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; see the file COPYING.  If not, write to
++ * the Free Software Foundation, 59 Temple Place - Suite 330,
++ * Boston, MA 02111-1307, USA.
++ */
++
++// SCRIPT_DISTANCE specifies the distance to the root directory of the
++// current script.
++function define_globals($script_distance) {
++  $info1 = pathinfo($_SERVER['SCRIPT_NAME']);
++  $info2 = pathinfo($_SERVER['SCRIPT_FILENAME']);
++  while ($script_distance &gt; 0) {
++    $info1 = pathinfo($info1['dirname']);
++    $info2 = pathinfo($info2['dirname']);
++    $script_distance--;
++  }
++  define('XEEMES_BASE_URL', $info1['dirname'].'/');
++  define('XEEMES_BASE_DIR', $info2['dirname']);
++}
++
++?&gt;
+
+Added: trunk/src/wikipedia.inc
+===================================================================
+--- trunk/src/wikipedia.inc	2005-09-04 15:46:22 UTC (rev 1)
++++ trunk/src/wikipedia.inc	2005-09-25 21:32:02 UTC (rev 2)
+@@ -0,0 +1,312 @@
++&lt;?php
++/*
++ * wikipedia.inc - transform a wikipedia-style document to XML
++ * Copyright (c) 2005 David Frese
++ */
++
++/*
++ * This file is part of Xeemes.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2, or (at your option)
++ * any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; see the file COPYING.  If not, write to
++ * the Free Software Foundation, 59 Temple Place - Suite 330,
++ * Boston, MA 02111-1307, USA.
++ */
++
++define('XEEMES_NS_URI', '<A HREF="http://xeemes.org/schema">http://xeemes.org/schema</A>');
++
++function strpos_nested($text, $end_str, $start_str, $offset = 0) {
++  do {
++    $end_pos = strpos($text, $end_str, $offset);
++    $start_pos = strpos($text, $start_str, $offset);
++    if ($start_pos === false)
++      return $end_pos;
++    else if ($start_pos &lt; $end_pos) {
++      $rec_pos = strpos_nested($text, $end_str, $start_str,
++			       $start_pos+strlen($start_str));
++      if ($rec_pos === false)
++	return false;
++      else
++	$offset = $rec_pos+strlen($end_str);
++    } else
++      return $end_pos;
++  } while ($offset &lt; strlen($text));
++  return false;
++}
++
++function nodelist2array($nodelist) {
++  $result = array();
++  for ($i = 0; $i &lt; $nodelist-&gt;length; $i++)
++    $result []= $nodelist-&gt;item($i);
++  return $result;
++}
++
++class WikipediaParser {
++  var $document;
++
++  function WikipediaParser () {
++  }
++
++  function parse($text) {
++    $lines = preg_replace('/[\r]?\n/', '&lt;/xeemes:line&gt;&lt;xeemes:line&gt;', $text);
++    $xml_text = '&lt;html xmlns:xeemes=&quot;'.XEEMES_NS_URI.'&quot;&gt;&lt;body&gt;&lt;xeemes:line&gt;'.
++      $lines.'&lt;/xeemes:line&gt;&lt;/body&gt;&lt;/html&gt;';
++    $this-&gt;document = DOMDocument::loadXML($xml_text);
++
++    $this-&gt;process_lines();
++    $this-&gt;process_inliners($this-&gt;document-&gt;documentElement);
++    $this-&gt;post_processing();
++
++    // header element inside
++    $docelem = $this-&gt;document-&gt;documentElement;
++    $headers = $docelem-&gt;getElementsByTagName('head');
++    if ($headers-&gt;length &gt; 0) {
++      $head = $headers-&gt;item(0);
++      $docelem-&gt;insertBefore($head-&gt;cloneNode(true), $docelem-&gt;firstChild);
++      $head-&gt;parentNode-&gt;removeChild($head);
++    }
++
++    $result = $this-&gt;document;
++    $this-&gt;document = null;
++    return $result;
++  }
++
++  function process_lines() {
++    // TODO: enumerate lines for error messages?
++    $next_line = $this-&gt;document-&gt;documentElement-&gt;firstChild-&gt;firstChild;
++    while ($next_line) {
++      $next_line = $this-&gt;process_next_line_thing($next_line);
++    }
++  }
++
++  function process_next_line_thing($line) {
++    // single liners
++    if (preg_match('/^====[ ]?.*====$/', $line-&gt;textContent))
++      return $this-&gt;process_header($line, 4);
++    else if (preg_match('/^===[ ]?.*===$/', $line-&gt;textContent))
++      return $this-&gt;process_header($line, 3);
++    else if (preg_match('/^==[ ]?.*==$/', $line-&gt;textContent))
++      return $this-&gt;process_header($line, 2);
++    else if (preg_match('/^=[ ]?.*=$/', $line-&gt;textContent))
++      return $this-&gt;process_header($line, 1);
++    else if ($line-&gt;textContent == '----') {
++      $hr = $this-&gt;document-&gt;createElement('hr');
++      $line-&gt;parentNode-&gt;replaceChild($hr, $line);
++      return $hr-&gt;nextSibling;
++    } else if ($line-&gt;textContent == '') {
++      $pbr = $this-&gt;document-&gt;createElement('pbr');
++      $line-&gt;parentNode-&gt;replaceChild($pbr, $line);
++      return $pbr-&gt;nextSibling;
++    } else {
++      foreach (nodelist2array($line-&gt;childNodes) as $child)
++	$line-&gt;parentNode-&gt;insertBefore($child, $line);
++      $next = $line-&gt;nextSibling;
++      $line-&gt;parentNode-&gt;removeChild($line);
++      return $next;
++    }
++    // TODO: multi-liners: lists, indentation, definition-lists, tables
++  }
++
++  function process_header($line, $depth) {
++    $line-&gt;firstChild-&gt;splitText($depth);
++    $line-&gt;removeChild($line-&gt;firstChild);
++    $line-&gt;lastChild-&gt;splitText(strlen($line-&gt;lastChild-&gt;textContent)-$depth);
++    $line-&gt;removeChild($line-&gt;lastChild);
++    $header = $this-&gt;document-&gt;createElement('h'.$depth);
++    foreach (nodelist2array($line-&gt;childNodes) as $child)
++      $header-&gt;appendChild($child-&gt;cloneNode(true));
++    $line-&gt;parentNode-&gt;replaceChild($header, $line);
++    return $header-&gt;nextSibling;
++  }
++
++  function replace_inliners($text, $start = 0, $end = -1) {
++    $result = array();
++    $current_text = '';
++    $text_end = false;
++    if ($end == -1) $end = strlen($text);
++    while ($start &lt; $end) {
++      $text_end = true;
++      $new = null;
++      // symmetric inliners
++      if (substr($text, $start, 5) == '\'\'\'\'\'') {
++	$pos = strpos($text, '\'\'\'\'\'', $start+5);
++	if ($pos === false) $this-&gt;parse_error();
++	$strong = $this-&gt;document-&gt;createElement('strong');
++	$em = $this-&gt;document-&gt;createElement('em');
++	foreach ($this-&gt;replace_inliners($text, $start+5, $pos) as $node)
++	  $em-&gt;appendChild($node);
++	$strong-&gt;appendChild($em);
++	$start = $pos+5;
++	$new = $strong;
++      } else if (substr($text, $start, 3) == '\'\'\'') {
++	$pos = strpos($text, '\'\'\'', $start+3);
++	if ($pos === false) $this-&gt;parse_error();
++	$em = $this-&gt;document-&gt;createElement('em');
++	foreach ($this-&gt;replace_inliners($text, $start+3, $pos) as $node)
++	  $em-&gt;appendChild($node);
++	$start = $pos+3;
++	$new = $em;
++      } else if (substr($text, $start, 2) == '\'\'') {
++	$pos = strpos($text, '\'\'', $start+2);
++	if ($pos === false) $this-&gt;parse_error();
++	$strong = $this-&gt;document-&gt;createElement('strong');
++	foreach ($this-&gt;replace_inliners($text, $start+2, $pos) as $node)
++	  $strong-&gt;appendChild($node);
++	$start = $pos+2;
++	$new = $strong;
++      } // asymmetric inliners
++      else if (substr($text, $start, 2) == '[[') {
++	$pos = strpos_nested($text, ']]', '[[', $start+2);
++	if ($pos === false) $this-&gt;parse_error();
++	$res = $this-&gt;document-&gt;createElementNS(XEEMES_NS_URI,
++						'xeemes:resource1');
++	foreach ($this-&gt;replace_inliners($text, $start+2, $pos) as $node)
++	  $res-&gt;appendChild($node);
++	$start = $pos+2;
++	$new = $res;
++      } else if (substr($text, $start, 1) == '[') {
++	$pos = strpos_nested($text, ']', '[', $start+1);
++	if ($pos === false) $this-&gt;parse_error();
++	$link = $this-&gt;document-&gt;createElementNS(XEEMES_NS_URI,
++						 'xeemes:link1');
++	foreach ($this-&gt;replace_inliners($text, $start+1, $pos) as $node)
++	  $link-&gt;appendChild($node);
++	$start = $pos+1;
++	$new = $link;
++      } else {
++	$text_end = false;
++	$current_text .= $text[$start];
++	$start += 1;
++      }
++
++      if ($text_end) {
++	if ($current_text != '')
++	  $result []= $this-&gt;document-&gt;createTextNode($current_text);
++	$result []= $new;
++	$current_text = '';
++      }
++    } // while
++    if ($current_text != '')
++      $result []= $this-&gt;document-&gt;createTextNode($current_text);
++    return $result;
++  }
++
++  function process_inliners($node) {
++    if ($node-&gt;nodeType == XML_TEXT_NODE) {
++      $parts = $this-&gt;replace_inliners($node-&gt;textContent);
++      $last = null;
++      foreach ($parts as $child) {
++	$node-&gt;parentNode-&gt;insertBefore($child, $node);
++	$last = $child;
++      }
++      $node-&gt;parentNode-&gt;removeChild($node);
++      return $last-&gt;nextSibling;
++    } else if (($node-&gt;nodeType == XML_ELEMENT_NODE) &amp;&amp;
++	       ($node-&gt;nodeName != 'nowiki')) {
++      $child = $node-&gt;firstChild;
++      while ($child) {
++	$child = $this-&gt;process_inliners($child);
++      }
++    }
++    return $node-&gt;nextSibling;
++  }
++
++  /** */
++  function post_processing($node = null) {
++    if ($node == null) $node = $this-&gt;document-&gt;documentElement;
++    // TODO: pbr
++    if ($node-&gt;nodeType == XML_ELEMENT_NODE) {
++      //if ($node-&gt;namespaceURI == XEEMES_NS_URI) { //?? TODO
++      if ($node-&gt;prefix == 'xeemes') {
++	if ($node-&gt;localName == 'resource1') {
++	  foreach (nodelist2array($node-&gt;childNodes) as $child)
++	    $this-&gt;post_processing($child);
++	  $this-&gt;process_resource1($node);
++	} else if ($node-&gt;localName == 'link1') {
++	  foreach (nodelist2array($node-&gt;childNodes) as $child)
++	    $this-&gt;post_processing($child);
++	  $this-&gt;process_link1($node);
++	}
++      } else {
++	foreach (nodelist2array($node-&gt;childNodes) as $child)
++	  $this-&gt;post_processing($child);
++      }
++    }
++  }
++
++  /** input: a xeemes:resource1 node, containing text nodes and other tags
++   *  is replaced by a xeemes:resource with appropriate attributes and content
++   */
++  function process_resource1($node) {
++    $resource = $this-&gt;document-&gt;createElementNS(XEEMES_NS_URI,
++						 'xeemes:resource');
++    $first = true;
++    foreach (nodelist2array($node-&gt;childNodes) as $child) {
++      if ($child-&gt;nodeType == XML_TEXT_NODE) {
++	$text_parts = explode('|', $child-&gt;textContent);
++	foreach ($text_parts as $text) {
++	  if ($first) { // the first text part is the location
++	    $first = false;
++	    if (($text != '') &amp;&amp; ($text[0] == ':')) {
++	      $resource-&gt;setAttribute('display', 'inline');
++	      $text = substr($text, 1);
++	    }
++	    $resource-&gt;setAttribute('location', $text);
++	  } else if (($text == 'left') ||
++		     ($text == 'right') ||
++		     ($text == 'center')) {
++	    // TODO is center valid XHTML?
++	    $resource-&gt;setAttribute('align', $text);
++	  } else if ($text == 'none') {
++	    // ignore ??
++	  } else if (($text == 'thumb') ||
++		     ($text == 'thumbnail')) {
++	    $resource-&gt;setAttribute('special', 'thumbnail');
++	  } else if (preg_match('/([0-9]+px)/', $text, $matches)) {
++	    $resource-&gt;setAttribute('size', $matches[1]);
++	  } else if ($text == 'frame') {
++	    $resource-&gt;setAttribute('special', 'frame');
++	  } else {
++	    // the alternate text
++	    $resource-&gt;appendChild($this-&gt;document-&gt;createTextNode($text));
++	  }
++	}
++      } else {
++	$resource-&gt;appendChild($child-&gt;cloneNode(true));
++      }
++    }
++    $node-&gt;parentNode-&gt;replaceChild($resource, $node);
++    //return $resource;
++  }
++
++  function process_link1($node) {
++    $result = $this-&gt;document-&gt;createElement('a');
++    $result-&gt;setAttribute('class', 'external');
++    if ($node-&gt;firstChild-&gt;nodeType == XML_TEXT_NODE) {
++      $pos = strpos($node-&gt;firstChild-&gt;textContent, ' ');
++      if (!($pos === false)) {
++	$url = substr($node-&gt;firstChild-&gt;textContent, 0, $pos);
++	$rest = substr($node-&gt;firstChild-&gt;textContent, $pos+1);
++	$node-&gt;replaceChild($this-&gt;document-&gt;createTextNode($rest),
++			    $node-&gt;firstChild);
++	$result-&gt;setAttribute('href', $url);
++      }
++    }
++    foreach (nodelist2array($node-&gt;childNodes) as $child) {
++      $result-&gt;appendChild($child-&gt;cloneNode(true));
++    }
++    $node-&gt;parentNode-&gt;replaceChild($result, $node);
++  }
++}
++
++?&gt;
+
+Added: trunk/view.php
+===================================================================
+--- trunk/view.php	2005-09-04 15:46:22 UTC (rev 1)
++++ trunk/view.php	2005-09-25 21:32:02 UTC (rev 2)
+@@ -0,0 +1,53 @@
++&lt;?php
++/*
++ * view.php - display a resource to a browser
++ * Copyright (c) 2005 David Frese
++ */
++
++/*
++ * This file is part of Xeemes.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2, or (at your option)
++ * any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; see the file COPYING.  If not, write to
++ * the Free Software Foundation, 59 Temple Place - Suite 330,
++ * Boston, MA 02111-1307, USA.
++ */
++
++require_once('src/utils.inc');
++define_globals(0);
++
++require_once('src/resources.inc');
++
++function view($location, $args) {
++  $resource = get_resource($location, $args);
++  if (($resource-&gt;type() &amp; XEEMES_RESOURCE_XML) &gt; 0) {
++    if (!$resource-&gt;exists()) {
++      print('&lt;html&gt;&lt;body&gt;404 - not found&lt;/body&gt;&lt;/html&gt;'); // TODO
++    } else {
++      print($resource-&gt;xmlContent());
++    }
++  } else {
++    if (!$resource-&gt;exists())
++      header('HTTP/1.1 404 Not found');
++    else if ($resource-&gt;original())
++      header('Location: '.$resource-&gt;url());
++    else {
++      // header Content-type ??
++      print($resource-&gt;stringContent());
++    }
++  }
++}
++
++view($_SERVER['PATH_INFO'], $_SERVER['argv']);
++
++?&gt;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	
+	
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#0">[ date ]</a>
+              <a href="thread.html#0">[ thread ]</a>
+              <a href="subject.html#0">[ subject ]</a>
+              <a href="author.html#0">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/xeemes-commits">More information about the Xeemes-commits
+mailing list</a><br>
+</body></html>

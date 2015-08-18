@@ -1,0 +1,791 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Xeemes-commits] r29 - in trunk: . src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/xeemes-commits/2005-October/index.html" >
+   <LINK REL="made" HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r29%20-%20in%20trunk%3A%20.%20src&In-Reply-To=%3C200510301750.j9UHoX3Q004933%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000026.html">
+   <LINK REL="Next"  HREF="000028.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Xeemes-commits] r29 - in trunk: . src</H1>
+    <B>David Frese at BerliOS</B> 
+    <A HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r29%20-%20in%20trunk%3A%20.%20src&In-Reply-To=%3C200510301750.j9UHoX3Q004933%40sheep.berlios.de%3E"
+       TITLE="[Xeemes-commits] r29 - in trunk: . src">dfrese at berlios.de
+       </A><BR>
+    <I>Sun Oct 30 18:50:33 CET 2005</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000026.html">[Xeemes-commits] r28 - trunk/src
+</A></li>
+        <LI>Next message: <A HREF="000028.html">[Xeemes-commits] r30 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#27">[ date ]</a>
+              <a href="thread.html#27">[ thread ]</a>
+              <a href="subject.html#27">[ subject ]</a>
+              <a href="author.html#27">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: dfrese
+Date: 2005-10-30 18:50:31 +0100 (Sun, 30 Oct 2005)
+New Revision: 29
+
+Added:
+   trunk/src/tags.inc
+Modified:
+   trunk/src/resources.inc
+   trunk/view.php
+Log:
+Subject: Moved xeemes-tags handling into separate file
+
+- Also slightly changed the logic of the tags (attributes need prefix)
+- And moved layout-transformation into view.php
+
+
+Modified: trunk/src/resources.inc
+===================================================================
+--- trunk/src/resources.inc	2005-10-30 17:45:10 UTC (rev 28)
++++ trunk/src/resources.inc	2005-10-30 17:50:31 UTC (rev 29)
+@@ -26,6 +26,7 @@
+ require_once('transformation.inc');
+ require_once('wikipedia.inc');
+ require_once('meta.inc');
++require_once('tags.inc');
+ 
+ define('XEEMES_RESOURCE_UNKNOWN',    1);
+ define('XEEMES_RESOURCE_XML',        2);
+@@ -223,33 +224,20 @@
+   }
+ 
+   function domContent() {
+-    return DOMDocument::load($this-&gt;filename);
++    $doc = DOMDocument::load($this-&gt;filename);
++
++    $this-&gt;process_instructions($doc);
++    XeemesTag::replaceTags($this, $doc-&gt;documentElement);
++    // TODO transformations
++
++    return $doc;
+   }
+ 
+   function xmlContent() {
+     $doc = $this-&gt;domContent();
+-
+-    // The XSL-Transformation removes PIs, hence we have to do it here too.
+-    $this-&gt;process_instructions($doc);
+-
+-    $layout_name = $this-&gt;get_meta('layout-name');
+-    if (!$layout_name) $layout_name = 'default';
+-    $layout_class = $this-&gt;get_meta('layout-class');
+-    if ($layout_name) {
+-      // class can be false
+-      $layout = new Layout($layout_class, $layout_name);
+-      $doc = $layout-&gt;process($doc, array()); // TODO parameters
+-    }
+-    $this-&gt;process_instructions($doc);
+-    $this-&gt;convert_special_tags($doc);
+-    // TODO transformations
+     return $doc-&gt;saveXML();
+   }
+ 
+-  function convert_special_tags($doc) {
+-    replace_special_tags($this, $doc-&gt;documentElement);
+-  }
+-
+   function process_instructions($doc, $node = false) {
+     global $allow_php;
+     if ($node === false) $node = $doc-&gt;documentElement;
+@@ -466,254 +454,4 @@
+   }
+ }
+ 
+-function include_resource($main_resource, $node,
+-			  $already_included_locations) {
+-  $doc = $node-&gt;ownerDocument;
+-  $result = array();
+-
+-  $location = $node-&gt;attributes-&gt;getNamedItem('location')-&gt;nodeValue;
+-  // TODO: args: location, thumbnail, size, frame
+-  $args = array();
+-  
+-  $display_n = $node-&gt;attributes-&gt;getNamedItem('display');
+-  $inline = $display_n &amp;&amp; $display_n-&gt;nodeValue;
+-  $resource = get_resource($location, $args,
+-			   $already_included_locations[0]);
+-  $name = $resource-&gt;getName();
+-
+-  if ($inline &amp;&amp; (in_array($location, $already_included_locations))) {
+-    return $doc-&gt;createTextNode('[Error: recursive inclusion of '.
+-				$location.']');
+-  } else {
+-    $location = $resource-&gt;getLocation();
+-    array_unshift($already_included_locations, $location);
+-  }
+-  $type = $resource-&gt;type();
+-  if ($inline) {
+-    if (($type &amp; XEEMES_RESOURCE_XML) &gt; 0) {
+-      if ($resource-&gt;exists()) {
+-	$incl_doc = $resource-&gt;domContent();
+-	replace_special_tags($main_resource, $incl_doc-&gt;documentElement,
+-			     $already_included_locations);
+-	$bodies = $incl_doc-&gt;getElementsByTagName('body');
+-	$body = $bodies-&gt;item(0);
+-	// TODO: heads?
+-	$result = array();
+-	foreach (nodelist2array($body-&gt;childNodes) as $child)
+-	  $result []= $doc-&gt;importNode($child, true);
+-      } else {
+-	$err = $doc-&gt;createTextNode('['.$location.' not found]');
+-	$result = $err;
+-      }
+-    } else if (($type &amp; XEEMES_RESOURCE_IMAGE) &gt; 0) {
+-      $img = $doc-&gt;createElement('img');
+-      $img-&gt;setAttribute('border', '0'); //?? TODO take over attrs?
+-      if ($node-&gt;hasAttribute('special')) {
+-	$args = array();
+-	$special = $node-&gt;getAttribute('special');
+-	if ($special == 'thumbnail')
+-	  $args['thumbnail'] = '1';
+-      }
+-      // TODO size, frame, etc.
+-      $srcurl = XEEMES_BASE_URL.'view.php'.$location;
+-      if (count($args) &gt; 0) $srcurl .= '?';
+-      foreach ($args as $name =&gt; $value)
+-	// TODO: really htmlspecialchars??
+-	$srcurl .= htmlspecialchars($name).'='.htmlspecialchars($value);
+-      $img-&gt;setAttribute('src', $srcurl);
+-      $result = $img;
+-    } else if (($type &amp; XEEMES_RESOURCE_DATA) &gt; 0) {
+-      $obj = $doc-&gt;createElement('object');
+-      $obj-&gt;setAttribute('data', XEEMES_BASE_URL.'data/'.$location);
+-      // TODO type, args
+-      $result = $obj;
+-    }
+-  } else {
+-    $link = $doc-&gt;createElement('a');
+-    if ($node-&gt;hasChildNodes()) { // textContent != ''
+-      foreach (nodelist2array($node-&gt;childNodes) as $child)
+-	$link-&gt;appendChild($doc-&gt;importNode($child, true)); // TODO
+-    } else
+-      $link-&gt;appendChild($doc-&gt;createTextNode($name));
+-    $link-&gt;setAttribute('href', $resource-&gt;view_url()); // TODO args
+-    // TODO: more sophisticated attribute setting, neg./pos. list etc.
+-    if ($node-&gt;hasAttribute('class'))
+-      $link-&gt;setAttribute('class', $node-&gt;getAttribute('class'));
+-    else
+-      $link-&gt;setAttribute('class', 'internal');
+-    $result = $link;
+-  }
+-
+-  return $result;
+-}
+-
+-function replace_special_tags($resource, $nodes,
+-			      $already_included_locations = null) {
+-  if (!$already_included_locations)
+-    $already_included_locations = array($resource-&gt;location);
+-
+-  if (!is_array($nodes))
+-    $nodes = array($nodes);
+-
+-  foreach ($nodes as $node) {
+-    if ($node-&gt;nodeType == XML_ELEMENT_NODE) {
+-      if ($node-&gt;namespaceURI == XEEMES_NS_URI) {
+-	if ($node-&gt;localName == 'xsl-transformation')
+-	  $new = make_xsl_transformation($resource, $node);
+-	else if ($node-&gt;localName == 'gallery')
+-	  $new = make_gallery($resource, $node);
+-	else if ($node-&gt;localName == 'resource')
+-	  $new = include_resource($resource, $node,
+-				  $already_included_locations);
+-	else
+-	  $new = $node-&gt;ownerDocument-&gt;createTextNode('Unknown special tag: '.
+-						      $node-&gt;localName);
+-	replace_node($node, $new);
+-      } else {
+-	foreach (nodelist2array($node-&gt;childNodes) as $child)
+-	  replace_special_tags($resource, $child, $already_included_locations);
+-      }
+-    }
+-  }
+-}
+-
+-function make_xsl_transformation($resource, $node) {
+-  // TODO: Error checking
+-  // load stylesheet
+-  $doc = $node-&gt;ownerDocument;
+-  $stylesheet_res = get_resource($node-&gt;getAttribute('stylesheet'), array(),
+-				 $resource-&gt;getLocation());
+-  $stylesheet = new XSLTProcessor();
+-  $stylesheet-&gt;importStyleSheet($stylesheet_res-&gt;domContent());
+-
+-  // find first element node child
+-  $docelement = null;
+-  foreach (nodelist2array($node-&gt;childNodes) as $child) {
+-    if ($child-&gt;nodeType == XML_ELEMENT_NODE) {
+-      $docelement = $child;
+-      break;
+-    }
+-  }
+-  $doc2 = new DomDocument();
+-  $doc2-&gt;appendChild($doc2-&gt;importNode($docelement, true));
+-
+-  $result_doc = $stylesheet-&gt;transformToDoc($doc2);
+-  
+-  $result_nodes = array();
+-  foreach (nodelist2array($result_doc-&gt;childNodes) as $node) {
+-    $result_nodes []= $doc-&gt;importNode($node, true);
+-  }
+-  return $result_nodes;
+-  
+-  //return $doc-&gt;importNode($result_doc-&gt;documentElement, true);
+-  // TODO: recursive replace special tags?
+-}
+-
+-function make_gallery($resource, $node) {
+-  $doc = $node-&gt;ownerDocument;
+-  $result = array();
+-
+-  /* collect images */
+-  // TODO: single resources
+-  $slocation = $node-&gt;getAttribute('location');
+-  $res = get_resource($slocation, array(), $resource-&gt;getLocation()); // TODO: fix dirname and '/' problem
+-  if (!$res-&gt;exists())
+-    return $doc-&gt;createTextNode('Location not found: '.$res-&gt;getLocation());
+-  $location = $res-&gt;getLocation();
+-  
+-  $locations = find_gallery_locations($location, true);
+-
+-  if (isset($resource-&gt;args['image'])) {
+-    /* view single image */
+-    $index = $resource-&gt;args['image'];
+-    $res = $doc-&gt;createElementNS(XEEMES_NS_URI, 'resource');
+-    $res-&gt;setAttribute('location', $locations[$index]);
+-    $res-&gt;setAttribute('display', 'inline');
+-
+-    $things = include_resource($resource, $res, array());
+-    $result = $things;
+-
+-    $nexti = ($index + 1) % count($locations);
+-    $previ = (count($locations) + $index - 1) % count($locations);
+-    //... TODO navigation
+-  } else {
+-    /* overview page */
+-    $columns = $node-&gt;hasAttribute('columns') ?
+-      $node-&gt;getAttribute('columns') : 6;
+-    $per_page = 30;
+-    
+-    if (isset($resource-&gt;args['page']))
+-      $page = $resource-&gt;args['page'];
+-    else
+-      $page = 0;
+-    
+-    $num_pages = count($locations)/$per_page;
+-    for ($i = 0; $i &lt; $num_pages; $i++) {
+-      $lnk = $doc-&gt;createElementNS(XEEMES_NS_URI, 'resource');
+-      $lnk-&gt;setAttribute('location', $resource-&gt;getLocation().'?page='.$i);
+-      $lnk-&gt;setAttribute('class', 'gallery-link');
+-      $lnk-&gt;appendChild($doc-&gt;createTextNode($i+1));
+-      $lnk-&gt;appendChild($doc-&gt;createTextNode(' '));
+-      $result []= include_resource($ressource, $lnk, array());
+-    }
+-    
+-    $table = $doc-&gt;createElement('table');
+-    $i = $page * $per_page;
+-    for ($j = 0; $j &lt; (count($locations) / $columns); $j++) {
+-      $row = $table-&gt;appendChild($doc-&gt;createElement('tr'));
+-      for ($k = 0; $k &lt; $columns; $k++) {
+-	$cell = $row-&gt;appendChild($doc-&gt;createElement('td'));
+-	
+-	$lnk = $doc-&gt;createElementNS(XEEMES_NS_URI, 'resource');
+-	$lnk-&gt;setAttribute('location', $resource-&gt;getLocation().'?image='.$i);
+-	
+-	$res = $doc-&gt;createElementNS(XEEMES_NS_URI, 'resource');
+-	$res-&gt;setAttribute('location', $locations[$i]);
+-	$res-&gt;setAttribute('display', 'inline');
+-	$res-&gt;setAttribute('special', 'thumbnail');
+-	
+-	$things = include_resource($resource, $res, array());
+-	if (!is_array($things)) $things = array($things);
+-	foreach ($things as $thing)
+-	  $lnk-&gt;appendChild($thing);
+-	
+-	$things = include_resource($resource, $lnk, array());
+-	if (!is_array($things)) $things = array($things);
+-	foreach ($things as $thing)
+-	  $cell-&gt;appendChild($thing);
+-	
+-	$i++;
+-	if (($i &gt;= count($locations)) || ($i &gt;= (($page + 1)*$per_page)))
+-	  break 2;
+-      }
+-    }
+-    $result []= $table;
+-  }
+-  return $result;
+-}
+-
+-function find_gallery_locations($location, $include_dirs) {
+-  global $filesystem_charset;
+-  $path = iconv('utf-8', $filesystem_charset, $location);
+-  $locations = array();
+-  $dir = opendir(XEEMES_BASE_DIR.'/data'.$path);
+-  while (($file = readdir($dir)) !== false) {
+-    $filename = $path.$file;
+-    $pathinfo = pathinfo($filename);
+-    if (($file[0] != '.') &amp;&amp;
+-	($pathinfo['extension'] != 'meta') &amp;&amp;
+-	($file[strlen($file)-1] != '~')) {
+-      // TODO: correct encoding of filesystem???
+-      if (is_dir(XEEMES_BASE_DIR.'/data'.$filename)) {
+-	$filename .= '/';
+-	if (!$include_dirs)
+-	  continue;
+-      }
+-      $locations []= iconv($filesystem_charset, 'utf-8', $filename);
+-    }
+-  }
+-  closedir($dir);
+-  return $locations;
+-}
+-
+ ?&gt;
+
+Added: trunk/src/tags.inc
+===================================================================
+--- trunk/src/tags.inc	2005-10-30 17:45:10 UTC (rev 28)
++++ trunk/src/tags.inc	2005-10-30 17:50:31 UTC (rev 29)
+@@ -0,0 +1,364 @@
++&lt;?php
++/*
++ * tags.inc - what to do with the tags in the xeemes namespace
++ * Copyright (c) 2005 David Frese
++ */
++
++/*
++ * This file is part of Xeemes.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2, or (at your option)
++ * any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; see the file COPYING.  If not, write to
++ * the Free Software Foundation, 59 Temple Place - Suite 330,
++ * Boston, MA 02111-1307, USA.
++ */
++
++define('XEEMES_NS_URI', '<A HREF="http://xeemes.org/schema">http://xeemes.org/schema</A>');
++
++require_once('resources.inc');
++
++function parse_url_arguments($spec) {
++  $defs = explode('&amp;', $spec);
++  $result = array();
++  foreach ($defs as $def) {
++    $pos = strpos($def, '=');
++    if ($pos === false)
++      $result[$def] = $def;
++    else
++      $result[substr($def, 0, $pos)] = substr($def, $pos+1);
++  }
++  return $result;
++}
++
++function unparse_url_arguments($args) {
++  $result = '';
++  $first = true;
++  foreach ($args as $name =&gt; $value) {
++    if ($first) {
++      $result .= $name.'='.$value;
++      $first = false;
++    } else
++      $result .= '&amp;'.$name.'='.$value;
++  }
++  return $result;
++}
++
++
++abstract class XeemesTag {
++  /* returns a node, owned by the same document as $node */
++  function fromNode($resource, $node) {
++    $attrs = array();
++    $content = array();
++    $i = 0;
++    while ($attrnode = $node-&gt;attributes-&gt;item($i)) {
++      if ($attrnode-&gt;namespaceURI == XEEMES_NS_URI)
++	$attrs[$attrnode-&gt;name] = $attrnode-&gt;value;
++      else
++	//$content []= $node-&gt;ownerDocument-&gt;importNode($attrnode, true);
++	$content []= $attrnode;
++      $i++;
++    }
++    $child = $node-&gt;firstChild;
++    while ($child) {
++      $content []= $child;
++      //$content []= $node-&gt;ownerDocument-&gt;importNode($child, true);
++      $child = $child-&gt;nextSibling;
++    }
++    return $this-&gt;toNode($resource, $node-&gt;ownerDocument, $attrs, $content);
++  }
++
++  /* return a single node */
++  abstract function toNode($resource, $doc, $attrs, $content = array());
++
++  static function error($doc, $message) {
++    $span = $doc-&gt;createElement('span');
++    $span-&gt;setAttribute('style', 'color: red;');
++    $span-&gt;appendChild($doc-&gt;createTextNode('[Error: '.$message.']'));
++    return $span;
++  }
++
++  private static $tags = array('resource' =&gt; 'XeemesResourceTag',
++			       'xsl-transformation'
++			       =&gt; 'XeemesXSLTransformationTag',
++			       'gallery' =&gt; 'XeemesGalleryTag');
++
++  static function replaceTags($resource, $node) {
++    if ($node-&gt;nodeType == XML_ELEMENT_NODE) {
++      if ($node-&gt;namespaceURI == XEEMES_NS_URI) {
++	if (isset(self::$tags[$node-&gt;localName])) {
++	  $class = self::$tags[$node-&gt;localName];
++	  $obj = new $class();
++	  $new = $obj-&gt;fromNode($resource, $node);
++	  $node-&gt;parentNode-&gt;replaceChild($new, $node);
++	} else {
++	  $err = XeemesTag::error($node-&gt;ownerDocument, 'Unknown xeemes tag: '.
++				  $node-&gt;localName);
++	  $node-&gt;parentNode-&gt;replaceNode($err, $node);
++	}
++      } else {
++	$child = $node-&gt;firstChild;
++	while ($child) {
++	  self::replaceTags($resource, $child);
++	  $child = $child-&gt;nextSibling;
++	}
++	//foreach (nodelist2array($node-&gt;childNodes) as $child)
++      }
++    }
++  }
++}
++
++class XeemesResourceTag extends XeemesTag {
++  public function toNode($resource, $doc, $attrs, $content = array()) {
++    if (!isset($attrs['location']))
++      return XeemesTag::error($doc, 'Location undefined in resource tag');
++    $location = $attrs['location'];
++    
++    $inline = (isset($attrs['display']) &amp;&amp; ($attrs['display'] == 'inline'))
++      || false;
++    if ($inline)
++      return $this-&gt;toNodeInline($resource, $doc, $location, $attrs, $content);
++    else
++      return $this-&gt;toNodeLink($resource, $doc, $location, $attrs, $content);
++  }
++
++  private function toNodeInline($resource, $doc, $location, $attrs,
++				$content) {
++    // TODO: prevent recursive inclusions?
++    $args = isset($attrs['arguments']) ?
++      parse_url_arguments($attrs['arguments']) : array();
++    $iresource = get_resource($location, $args, $resource-&gt;getLocation());
++    $type = $iresource-&gt;type();
++    if (($type &amp; XEEMES_RESOURCE_XML) &gt; 0) {
++      if (!$iresource-&gt;exists())
++	return XeemesTag::error($doc, 'Resource &quot;'.$iresource-&gt;getLocation().
++				'&quot; not found');
++      else {
++	$idoc = $iresource-&gt;domContent();
++	// TODO: extract body if existing
++	$inode = $doc-&gt;importNode($idoc-&gt;documentElement, true);
++	foreach ($content as $child)
++	  $inode-&gt;appendChild($child);
++	return $inode;
++      }
++    } else if (($type &amp; XEEMES_RESOURCE_IMAGE) &gt; 0) {
++      $img = $doc-&gt;createElement('img');
++      $url = XEEMES_BASE_URL.'view.php'.$iresource-&gt;getLocation();
++      // TODO: size, frame, etc.
++      // TODO: prepend or append args to not override user-defined args?
++      if ($attrs['special'] == 'thumbnail')
++	$args['thumbnail'] = '1';
++
++      if (count($args) &gt; 0)
++	$url .= '?'.unparse_url_arguments($args);
++
++      $img-&gt;setAttribute('src', $url);
++      $img-&gt;setAttribute('alt', $iresource-&gt;getName());
++      return $img;
++    } else if (($type &amp; XEEMES_RESOURCE_IMAGE) &gt; 0) {
++      $obj = $doc-&gt;createElement('object');
++      $url = XEEMES_BASE_URL.'data/'.$iresource-&gt;getLocation();
++      $obj-&gt;setAttribute('data', $url);
++      // TODO type, args
++      return $obj;
++    } else
++      return XeemesTag::error($doc, 'Don\'t know how to inline &quot;'.$location.
++			      '&quot; ('.$type.')');
++  }
++
++  private function toNodeLink($resource, $doc, $location, $attrs,
++			      $content) {
++    $args = isset($attrs['arguments']) ?
++      parse_url_arguments($attrs['arguments']) : array();
++    $iresource = get_resource($location, $args, $resource-&gt;getLocation());
++    $ilocation = $iresource-&gt;getLocation();
++
++    if (self::onlyAttributes($content))
++      $content []= $doc-&gt;createTextNode($iresource-&gt;getName());
++    
++    $link = $doc-&gt;createElement('a');
++    $href = XEEMES_BASE_URL.'view.php'.$ilocation;
++    if (count($args) &gt; 0)
++      $href .= '?'.unparse_url_arguments($args);
++    $link-&gt;setAttribute('href', $href);
++    $link-&gt;setAttribute('class', 'xeemes-internal');
++    foreach ($content as $node)
++      $link-&gt;appendChild($node);
++    return $link;
++  }
++
++  private static function onlyAttributes($arr) {
++    foreach ($arr as $node) {
++      if ($node-&gt;nodeType != XML_ATTRIBUTE_NODE)
++	return false;
++    }
++    return true;
++  }
++}
++
++class XeemesXSLTransformationTag extends XeemesTag {
++  public function toNode($resource, $doc, $attrs, $content = array()) {
++    if (!isset($attrs['stylesheet']))
++      return XeemesTag::error($doc, 'Stylesheet undefined in xsl-transformation tag');
++
++    /* load the stylesheet */
++    $sresource = get_resource($attrs['stylesheet'], array(),
++			      $resource-&gt;getLocation());
++    $stylesheet = new XSLTProcessor();
++    $stylesheet-&gt;importStyleSheet($sresource-&gt;domContent());
++
++    /* only one element allowed in content */
++    $docelement = null;
++    foreach ($content as $node) {
++      if ($node-&gt;nodeType == XML_ELEMENT_NODE) {
++	$docelement = $node;
++	break;
++      }
++    }
++    if ($docelement == null)
++      return XeemesTag::error($doc, 'No content specified for xsl-transformation');
++
++    /* content to be transformed */
++    $doc2 = new DomDocument();
++    $doc2-&gt;appendChild($doc2-&gt;importNode($docelement, true));
++
++    /* transformation */
++    $result_doc = $stylesheet-&gt;transformToDoc($doc2);
++    
++    /* import to main doc */
++    return $doc-&gt;importNode($result_doc-&gt;documentElement, true);
++  }
++}
++
++class XeemesGalleryTag extends XeemesTag {
++  public function toNode($resource, $doc, $attrs, $content = array()) {
++    /* collect image locations */
++    // TODO: error checks
++    // TODO: single resources
++    if (!isset($attrs['location']))
++      return XeemesTag::error($doc, 'Gallery location not defined');
++    $slocation = $attrs['location'];
++
++    $res = get_resource($slocation, array(), $resource-&gt;getLocation());
++    if (!$res-&gt;exists())
++      return XeemesTag::error('Gallery location not found: '.
++			      $res-&gt;getLocation());
++    $location = $res-&gt;getLocation();
++  
++    $locations = self::find_locations($location, true);
++
++    if (isset($resource-&gt;args['image'])) { // TODO: maybe separate
++					   // resource and request args?
++      /* view single image */
++      $index = $resource-&gt;args['image'];
++      $rt = new XeemesResourceTag();
++      $res = $rt-&gt;toNode($resource, $doc,
++			 array('location' =&gt; $locations[$index],
++			       'display' =&gt; 'inline'));
++      // TODO: navigation
++      $nexti = ($index + 1) % count($locations);
++      $previ = (count($locations) + $index - 1) % count($locations);
++
++      return $res;
++    } else {
++      /* overview page */
++      $columns = max(isset($attrs['columns']) ? $attrs['columns'] : 6, 1);
++      $per_page = max(isset($attrs['images-per-page']) ?
++	$attrs['images-per-page'] : 30, 1);
++
++      if (isset($resource-&gt;args['page']))
++	$page = $resource-&gt;args['page'];
++      else
++	$page = 0;
++
++      $num_pages = count($locations)/$per_page;
++
++      $results = array();
++      /* links to the pages */
++      $rt = new XeemesResourceTag();
++      $links = $doc-&gt;createElement('div');
++      $links-&gt;setAttribute('class', 'xeemes-gallery-page-links');
++      for ($i = 0; $i &lt; $num_pages; $i++) {
++	$lnk = $rt-&gt;toNode($resource, $doc,
++			   array('location' =&gt; $resource-&gt;getLocation(),
++				 'arguments' =&gt; 'page='.$i),
++			   array($doc-&gt;createTextNode($i+1)));
++	$links-&gt;appendChild($lnk);
++      }
++      $results []= $links;
++      
++      /* thumbnails of images on this page */
++      $thumbnails = array();
++      for ($i = $page * $per_page;
++	   $i &lt; min($per_page, count($locations) - ($page * $per_page));
++	   $i++) {
++	$img = $rt-&gt;toNode($resource, $doc,
++			   array('location' =&gt; $locations[$i],
++				 'display' =&gt; 'inline',
++				 'special' =&gt; 'thumbnail'));
++	$lnk = $rt-&gt;toNode($resource, $doc,
++			   array('location' =&gt; $resource-&gt;getLocation(),
++				 'arguments' =&gt; 'image='.$i),
++			   array($img));
++	$thumbnails []= $lnk;
++      }
++
++      /* create a table with all thumbnails */
++      $row = 0;
++      $table = $doc-&gt;createElement('table');
++      $tr = null;
++      foreach ($thumbnails as $thumb) {
++	if ($row == 0)
++	  $tr = $table-&gt;appendChild($doc-&gt;createElement('tr'));
++	$td = $tr-&gt;appendChild($doc-&gt;createElement('td'));
++	$td-&gt;appendChild($thumb);
++
++	$row = ($row+1) % ($per_page / $columns);
++      }
++      $results []= $table;
++      
++      /* div with results */
++      $div = $doc-&gt;createElement('div');
++      $div-&gt;setAttribute('class', 'xeemes-gallery');
++      foreach ($results as $res)
++	$div-&gt;appendChild($res);
++      return $div;
++    }
++  }
++
++  private static function find_locations($location, $include_dirs) {
++    global $filesystem_charset;
++    $path = iconv('utf-8', $filesystem_charset, $location);
++    $locations = array();
++    $dir = opendir(XEEMES_BASE_DIR.'/data'.$path);
++    while (($file = readdir($dir)) !== false) {
++      $filename = $path.$file;
++      $pathinfo = pathinfo($filename);
++      if (($file[0] != '.') &amp;&amp;
++	  ($pathinfo['extension'] != 'meta') &amp;&amp;
++	  ($file[0] != '_') &amp;&amp;
++	  ($file[strlen($file)-1] != '~')) {
++	// TODO: correct encoding of filesystem???
++	if (is_dir(XEEMES_BASE_DIR.'/data'.$filename)) {
++	  $filename .= '/';
++	  if (!$include_dirs)
++	    continue;
++	}
++	$locations []= iconv($filesystem_charset, 'utf-8', $filename);
++      }
++    }
++    closedir($dir);
++    return $locations;
++  }
++}
++
++?&gt;
+
+Modified: trunk/view.php
+===================================================================
+--- trunk/view.php	2005-10-30 17:45:10 UTC (rev 28)
++++ trunk/view.php	2005-10-30 17:50:31 UTC (rev 29)
+@@ -28,6 +28,7 @@
+ 
+ require_once('src/resources.inc');
+ require_once('src/authenticate.inc');
++require_once('src/transformation.inc');
+ 
+ function view($location, $args) {
+   $resource = get_resource($location, $args);
+@@ -42,7 +43,20 @@
+       print('&lt;html&gt;&lt;body&gt;404 - not found&lt;/body&gt;&lt;/html&gt;'); // TODO
+     } else {
+       header('Content-Type: text/html; charset=utf-8');
+-      print($resource-&gt;xmlContent());
++      $doc = $resource-&gt;domContent();
++
++      $layout_name = $resource-&gt;get_meta('layout-name');
++      if (!$layout_name) $layout_name = 'default';
++      $layout_class = $resource-&gt;get_meta('layout-class');
++      if ($layout_name) {
++	// class can be false
++	$layout = new Layout($layout_class, $layout_name);
++	$doc = $layout-&gt;process($doc, array()); // TODO parameters
++      }
++      //$this-&gt;process_instructions($doc); // TODO
++      XeemesTag::replaceTags($resource, $doc-&gt;documentElement);
++
++      print($doc-&gt;saveXML());
+     }
+   } else {
+     if (!$resource-&gt;exists())
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000026.html">[Xeemes-commits] r28 - trunk/src
+</A></li>
+	<LI>Next message: <A HREF="000028.html">[Xeemes-commits] r30 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#27">[ date ]</a>
+              <a href="thread.html#27">[ thread ]</a>
+              <a href="subject.html#27">[ subject ]</a>
+              <a href="author.html#27">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/xeemes-commits">More information about the Xeemes-commits
+mailing list</a><br>
+</body></html>

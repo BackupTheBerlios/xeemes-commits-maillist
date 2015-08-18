@@ -1,0 +1,205 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Xeemes-commits] r23 - trunk/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/xeemes-commits/2005-October/index.html" >
+   <LINK REL="made" HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r23%20-%20trunk/src&In-Reply-To=%3C200510282111.j9SLBA2H013078%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000020.html">
+   <LINK REL="Next"  HREF="000022.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Xeemes-commits] r23 - trunk/src</H1>
+    <B>David Frese at BerliOS</B> 
+    <A HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r23%20-%20trunk/src&In-Reply-To=%3C200510282111.j9SLBA2H013078%40sheep.berlios.de%3E"
+       TITLE="[Xeemes-commits] r23 - trunk/src">dfrese at berlios.de
+       </A><BR>
+    <I>Fri Oct 28 23:11:10 CEST 2005</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000020.html">[Xeemes-commits] r22 - trunk/src
+</A></li>
+        <LI>Next message: <A HREF="000022.html">[Xeemes-commits] r24 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#21">[ date ]</a>
+              <a href="thread.html#21">[ thread ]</a>
+              <a href="subject.html#21">[ subject ]</a>
+              <a href="author.html#21">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: dfrese
+Date: 2005-10-28 23:11:09 +0200 (Fri, 28 Oct 2005)
+New Revision: 23
+
+Modified:
+   trunk/src/resources.inc
+Log:
+Subject: Added DirectoryResource and fixed get_resource
+
+
+
+Modified: trunk/src/resources.inc
+===================================================================
+--- trunk/src/resources.inc	2005-10-28 21:01:31 UTC (rev 22)
++++ trunk/src/resources.inc	2005-10-28 21:11:09 UTC (rev 23)
+@@ -33,6 +33,7 @@
+ define('XEEMES_RESOURCE_HTML',       8);
+ define('XEEMES_RESOURCE_DATA',      16);
+ define('XEEMES_RESOURCE_WIKIPEDIA', 32);
++define('XEEMES_RESOURCE_DIRECTORY', 64);
+ define('XEEMES_RESOURCE_JPEG',      128);
+ define('XEEMES_RESOURCE_PNG',       256);
+ define('XEEMES_RESOURCE_GIF',       512);
+@@ -43,23 +44,33 @@
+ 			   'index.php');
+ $filesystem_charset = 'iso-8859-1';
+ 
++function mypathinfo($path) {
++  $info = pathinfo($path);
++  if ($path[strlen($path)-1] == '/')
++    $info['pathname'] = $path;
++  else
++    $info['pathname'] = $info['dirname'].'/';
++  return $info;
++}
++
+ function get_resource($location, $args, $relation_location = '') {
+   if (substr($location, 0, 1) != '/') {
+-    $info = pathinfo($relation_location);
++    $info = mypathinfo($relation_location);
+     if ($info['dirname'] == '/') $info['dirname'] = '';
+-    $location = $info['dirname'].'/'.$location;
++    $location = $info['pathname'].$location;
+   }
+   $location = canonic_path($location); // TODO: can return false
+ 
++  global $filesystem_charset;
++  $filename = iconv($filesystem_charset, 'utf-8', $location);
++
++  if (($location[strlen($location)-1] != '/') &amp;&amp;
++      (file_exists(XEEMES_BASE_DIR.'/data'.$filename)) &amp;&amp;
++      (is_dir(XEEMES_BASE_DIR.'/data'.$filename)))
++    $location .= '/';
++
+   if ($location[strlen($location)-1] == '/') {
+-    // a request for a directory
+-    global $directory_indices;
+-    foreach ($directory_indices as $index) {
+-      $res = get_resource($location.$index, $args, $relation_location);
+-      if ($res-&gt;exists())
+-	return $res;
+-    }
+-    // no index file... TODO: create directory listing
++    return new DirectoryResource($location, $args);
+   }
+ 
+   $info = pathinfo($location);
+@@ -95,6 +106,7 @@
+   var $args;
+ 
+   function Resource ($location, $args) {
++    global $filesystem_charset;
+     $this-&gt;location = $location;
+     $this-&gt;meta_data = null;
+ 
+@@ -395,6 +407,67 @@
+   }
+ }
+ 
++class DirectoryResource extends XMLResource {
++  // a request for a directory
++  var $index_resource;
++
++  function DirectoryResource ($location, $args) {
++    parent::XMLResource($location, $args);
++    global $directory_indices;
++    $this-&gt;index_resource = null;
++    foreach ($directory_indices as $index) {
++      $res = get_resource($location.$index, $args, $relation_location);
++      if ($res-&gt;exists()) {
++	$this-&gt;index_resource = $res;
++	break;
++      }
++    }
++    // no index file... TODO: create directory listing
++  }
++
++  function type() {
++    return XEEMES_RESOURCE_DIRECTORY | parent::type();
++  }
++
++  function extensions() {
++    return array();
++  }
++
++  function domContent() {
++    if ($this-&gt;index_resource)
++      return $this-&gt;index_resource-&gt;domContent();
++    else
++      return DOMDocument::loadXML('&lt;?xml version=&quot;1.0&quot; encoding=&quot;iso-8859-1&quot;?&gt;
++&lt;html&gt;&lt;body&gt;Automatic directory indexing not implemented&lt;/body&gt;&lt;/html&gt;'); // TODO
++  }
++
++  function getSubresources() {
++    global $directory_indices, $filesystem_charset;
++    // TODO: override by meta-data
++    $path = $this-&gt;getLocation();
++    $locations = array();
++    $dir = opendir(XEEMES_BASE_DIR.'/data'.$path);
++    while (($file = readdir($dir)) !== false) {
++      $filename = $path.$file;
++      $pathinfo = pathinfo($filename);
++      if (($file[0] != '.') &amp;&amp;
++	  ($pathinfo['extension'] != 'meta') &amp;&amp;
++	  (!in_array($pathinfo['basename'], $directory_indices)) &amp;&amp;
++	  ($file[strlen($file)-1] != '~')) {
++	// TODO: correct encoding of filesystem???
++	if (is_dir(XEEMES_BASE_DIR.'/data'.$filename))
++	  $filename .= '/';
++	$locations []= iconv($filesystem_charset, 'utf-8', $filename);
++      }
++    }
++    closedir($dir);
++    $result = array();
++    foreach ($locations as $location)
++      $result []= get_resource($location, array());
++    return $result;
++  }
++}
++
+ function include_resource($main_resource, $node,
+ 			  $already_included_locations) {
+   $doc = $node-&gt;ownerDocument;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000020.html">[Xeemes-commits] r22 - trunk/src
+</A></li>
+	<LI>Next message: <A HREF="000022.html">[Xeemes-commits] r24 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#21">[ date ]</a>
+              <a href="thread.html#21">[ thread ]</a>
+              <a href="subject.html#21">[ subject ]</a>
+              <a href="author.html#21">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/xeemes-commits">More information about the Xeemes-commits
+mailing list</a><br>
+</body></html>

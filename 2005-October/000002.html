@@ -1,0 +1,137 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Xeemes-commits] r4 - trunk/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/xeemes-commits/2005-October/index.html" >
+   <LINK REL="made" HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r4%20-%20trunk/src&In-Reply-To=%3C200510032009.j93K9qSh023863%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000001.html">
+   <LINK REL="Next"  HREF="000003.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Xeemes-commits] r4 - trunk/src</H1>
+    <B>David Frese at BerliOS</B> 
+    <A HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r4%20-%20trunk/src&In-Reply-To=%3C200510032009.j93K9qSh023863%40sheep.berlios.de%3E"
+       TITLE="[Xeemes-commits] r4 - trunk/src">dfrese at berlios.de
+       </A><BR>
+    <I>Mon Oct  3 22:09:52 CEST 2005</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000001.html">[Xeemes-commits] r3 - in trunk: . src
+</A></li>
+        <LI>Next message: <A HREF="000003.html">[Xeemes-commits] r5 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2">[ date ]</a>
+              <a href="thread.html#2">[ thread ]</a>
+              <a href="subject.html#2">[ subject ]</a>
+              <a href="author.html#2">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: dfrese
+Date: 2005-10-03 22:09:52 +0200 (Mon, 03 Oct 2005)
+New Revision: 4
+
+Modified:
+   trunk/src/wikipedia.inc
+Log:
+Subject: Fixed line recognition/separation
+
+
+
+Modified: trunk/src/wikipedia.inc
+===================================================================
+--- trunk/src/wikipedia.inc	2005-10-01 15:58:16 UTC (rev 3)
++++ trunk/src/wikipedia.inc	2005-10-03 20:09:52 UTC (rev 4)
+@@ -58,9 +58,8 @@
+   }
+ 
+   function parse($text) {
+-    $lines = preg_replace('/[\r]?\n/', '&lt;/xeemes:line&gt;&lt;xeemes:line&gt;', $text);
+-    $xml_text = '&lt;html xmlns:xeemes=&quot;'.XEEMES_NS_URI.'&quot;&gt;&lt;body&gt;&lt;xeemes:line&gt;'.
+-      $lines.'&lt;/xeemes:line&gt;&lt;/body&gt;&lt;/html&gt;';
++    $xml_text = '&lt;html xmlns:xeemes=&quot;'.XEEMES_NS_URI.'&quot;&gt;&lt;body&gt;'.
++      $text.'&lt;/body&gt;&lt;/html&gt;';
+     $this-&gt;document = DOMDocument::loadXML($xml_text);
+ 
+     $this-&gt;process_lines();
+@@ -82,6 +81,47 @@
+   }
+ 
+   function process_lines() {
++    // split text nodes at line breaks
++    $first = $this-&gt;document-&gt;documentElement-&gt;firstChild-&gt;firstChild;
++    $line = array();
++    while ($first) {
++      if (($first-&gt;nodeType == XML_TEXT_NODE) &amp;&amp;
++	  (preg_match('/[\r]?\n/', $first-&gt;textContent))) {
++	$pos = strpos($first-&gt;textContent, &quot;\n&quot;);
++	$dim = 1;
++	$pos2 = strpos($first-&gt;textContent, &quot;\r\n&quot;);
++	if (($pos2 !== false) &amp;&amp; ($pos2 &lt; $pos)) {
++	  $pos = $pos2;
++	  $dim = 2;
++	}
++	$s1 = $this-&gt;document-&gt;createTextNode(substr($first-&gt;textContent,
++						     0, $pos));
++	$s2 = $this-&gt;document-&gt;createTextNode(substr($first-&gt;textContent,
++						     $pos+$dim));
++	$line []= $s1;
++	$xl = $this-&gt;document-&gt;createElementNS(XEEMES_NS_URI,
++					       'xeemes:line');
++	foreach ($line as $item)
++	  $xl-&gt;appendChild($item);
++	$line = array();
++	$first-&gt;parentNode-&gt;insertBefore($xl, $first);
++	$first-&gt;parentNode-&gt;replaceChild($s2, $first);
++	$first = $s2;
++      } else {
++	$line []= $first; //$first-&gt;cloneNode(true);
++	$next = $first-&gt;nextSibling;
++	$first-&gt;parentNode-&gt;removeChild($first);
++	$first = $next;
++      }
++    }
++    if (count($line) &gt; 0) {
++      $xl = $this-&gt;document-&gt;createElementNS(XEEMES_NS_URI,
++					     'xeemes:line');
++      foreach ($line as $item)
++	$xl-&gt;appendChild($item);
++      $this-&gt;document-&gt;documentElement-&gt;firstChild-&gt;appendChild($xl);
++    }
++
+     // TODO: enumerate lines for error messages?
+     $next_line = $this-&gt;document-&gt;documentElement-&gt;firstChild-&gt;firstChild;
+     while ($next_line) {
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000001.html">[Xeemes-commits] r3 - in trunk: . src
+</A></li>
+	<LI>Next message: <A HREF="000003.html">[Xeemes-commits] r5 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2">[ date ]</a>
+              <a href="thread.html#2">[ thread ]</a>
+              <a href="subject.html#2">[ subject ]</a>
+              <a href="author.html#2">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/xeemes-commits">More information about the Xeemes-commits
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,273 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Xeemes-commits] r11 - trunk/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/xeemes-commits/2005-October/index.html" >
+   <LINK REL="made" HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r11%20-%20trunk/src&In-Reply-To=%3C200510171934.j9HJYajZ024350%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000008.html">
+   <LINK REL="Next"  HREF="000010.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Xeemes-commits] r11 - trunk/src</H1>
+    <B>David Frese at BerliOS</B> 
+    <A HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r11%20-%20trunk/src&In-Reply-To=%3C200510171934.j9HJYajZ024350%40sheep.berlios.de%3E"
+       TITLE="[Xeemes-commits] r11 - trunk/src">dfrese at berlios.de
+       </A><BR>
+    <I>Mon Oct 17 21:34:36 CEST 2005</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000008.html">[Xeemes-commits] r10 - trunk/src
+</A></li>
+        <LI>Next message: <A HREF="000010.html">[Xeemes-commits] r12 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#9">[ date ]</a>
+              <a href="thread.html#9">[ thread ]</a>
+              <a href="subject.html#9">[ subject ]</a>
+              <a href="author.html#9">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: dfrese
+Date: 2005-10-17 21:34:35 +0200 (Mon, 17 Oct 2005)
+New Revision: 11
+
+Modified:
+   trunk/src/resources.inc
+Log:
+Subject: Changed special tag replacing and implemented xsl-transformation
+
+
+
+Modified: trunk/src/resources.inc
+===================================================================
+--- trunk/src/resources.inc	2005-10-17 19:29:09 UTC (rev 10)
++++ trunk/src/resources.inc	2005-10-17 19:34:35 UTC (rev 11)
+@@ -167,14 +167,13 @@
+       $layout = new Layout($class, $this-&gt;get_meta('layout-name'));
+       $doc = $layout-&gt;process($doc, array()); // TODO parameters
+     }
+-    $this-&gt;convert_special_tags($doc); // TODO prevent mutual incs
++    $this-&gt;convert_special_tags($doc);
+     // TODO transformations
+     return $doc-&gt;saveXML();
+   }
+ 
+   function convert_special_tags($doc) {
+-    include_resources($doc, $doc-&gt;documentElement, array($this-&gt;location));
+-    replace_special_tags($this, $doc, $doc-&gt;documentElement);
++    replace_special_tags($this, $doc-&gt;documentElement);
+   }
+ }
+ 
+@@ -230,67 +229,67 @@
+   }
+ }
+ 
+-function include_resources($doc, $node, $already_included_locations) {
+-  if ($node-&gt;nodeType == XML_ELEMENT_NODE) {
+-    if ($node-&gt;nodeName == 'xeemes:resource') {
+-      $location = $node-&gt;attributes-&gt;getNamedItem('location')-&gt;nodeValue;
+-      $name = $location;
+-      // TODO: args: location, thumbnail, size, frame
+-      $args = array();
++function include_resource($main_resource, $node,
++			  $already_included_locations) {
++  $doc = $node-&gt;ownerDocument;
++  $result = array();
+ 
+-      $display_n = $node-&gt;attributes-&gt;getNamedItem('display');
+-      $inline = $display_n &amp;&amp; $display_n-&gt;nodeValue;
+-      $resource = get_resource($location, $args,
+-			       $already_included_locations[0]);
+-      if (in_array($location, $already_included_locations)) {
+-	replace_node($node,
+-		     $doc-&gt;createTextNode('[Error: recursive '.
+-					  'inclusion of '.$location.']'));
+-	return;
++  $location = $node-&gt;attributes-&gt;getNamedItem('location')-&gt;nodeValue;
++  $name = $location;
++  // TODO: args: location, thumbnail, size, frame
++  $args = array();
++  
++  $display_n = $node-&gt;attributes-&gt;getNamedItem('display');
++  $inline = $display_n &amp;&amp; $display_n-&gt;nodeValue;
++  $resource = get_resource($location, $args,
++			   $already_included_locations[0]);
++  if (in_array($location, $already_included_locations)) {
++    return $doc-&gt;createTextNode('[Error: recursive inclusion of '.
++				$location.']');
++  } else {
++    $location = $resource-&gt;get_location();
++    array_unshift($already_included_locations, $location);
++  }
++  $type = $resource-&gt;type();
++  if ($inline) {
++    if (($type &amp; XEEMES_RESOURCE_XML) &gt; 0) {
++      if ($resource-&gt;exists()) {
++	$incl_doc = $resource-&gt;domContent();
++	replace_special_tags($main_resource, $incl_doc-&gt;documentElement,
++			     $already_included_locations);
++	$bodies = $incl_doc-&gt;getElementsByTagName('body');
++	$body = $bodies-&gt;item(0);
++	// TODO: heads?
++	$result = array();
++	foreach (nodelist2array($body-&gt;childNodes) as $child)
++	  $result []= $doc-&gt;importNode($child, true);
+       } else {
+-	$location = $resource-&gt;get_location();
+-	array_unshift($already_included_locations, $location);
++	$err = $doc-&gt;createTextNode('['.$location.' not found]');
++	$result = $err;
+       }
+-      $type = $resource-&gt;type();
+-      if ($inline) {
+-	if (($type &amp; XEEMES_RESOURCE_XML) &gt; 0) {
+-	  if ($resource-&gt;exists()) {
+-	    $incl_doc = $resource-&gt;domContent();
+-	    $incl_node = $doc-&gt;importNode($incl_doc-&gt;documentElement, true);
+-	    $bodies = $incl_node-&gt;getElementsByTagName('body');
+-	    replace_node($node, nodelist2array($bodies-&gt;item(0)-&gt;childNodes));
+-	  } else {
+-	    replace_node($node, $doc-&gt;createTextNode('['.$location.
+-						     ' Not found]'));
+-	  }
+-	} else if (($type &amp; XEEMES_RESOURCE_IMAGE) &gt; 0) {
+-	  $img = $doc-&gt;createElement('img');
+-	  // TODO args
+-	  $img-&gt;setAttribute('src', XEEMES_BASE_URL.'view.php'.$location);
+-	  replace_node($node, $img);
+-	} else if (($type &amp; XEEMES_RESOURCE_DATA) &gt; 0) {
+-	  $obj = $doc-&gt;createElement('object');
+-	  $obj-&gt;setAttribute('data', XEEMES_BASE_URL.'data/'.$location);
+-	  // TODO type, args
+-	}
+-      } else {
+-	$a = $doc-&gt;createElement('a');
+-	if ($node-&gt;hasChildNodes()) {
+-	  foreach (nodelist2array($node-&gt;childNodes) as $child)
+-	    $a-&gt;appendChild($a, $doc-&gt;importNode($child, true));
+-	} else
+-	  $a-&gt;appendChild($doc-&gt;createTextNode($name));
+-	$a-&gt;setAttribute('href', $resource-&gt;view_url()); // TODO args
+-	replace_node($node, $a);
+-      }
++    } else if (($type &amp; XEEMES_RESOURCE_IMAGE) &gt; 0) {
++      $img = $doc-&gt;createElement('img');
++      // TODO args
++      $img-&gt;setAttribute('src', XEEMES_BASE_URL.'view.php'.$location);
++      $result = $img;
++    } else if (($type &amp; XEEMES_RESOURCE_DATA) &gt; 0) {
++      $obj = $doc-&gt;createElement('object');
++      $obj-&gt;setAttribute('data', XEEMES_BASE_URL.'data/'.$location);
++      // TODO type, args
++      $result = $obj;
+     }
+-    $child = $node-&gt;firstChild;
+-    while ($child) {
+-      $next = $child-&gt;nextSibling;
+-      include_resources($doc, $child, $already_included_locations);
+-      $child = $next;
+-    }
++  } else {
++    $link = $doc-&gt;createElement('a');
++    if ($node-&gt;hasChildNodes()) {
++      foreach (nodelist2array($node-&gt;childNodes) as $child)
++	$link-&gt;appendChild($link, $doc-&gt;importNode($child, true));
++    } else
++      $link-&gt;appendChild($doc-&gt;createTextNode($name));
++    $link-&gt;setAttribute('href', $resource-&gt;view_url()); // TODO args
++    $result = $link;
+   }
++
++  return $result;
+ }
+ 
+ function replace_node($oldnode, $newnodes) {
+@@ -302,26 +301,42 @@
+   $oldnode-&gt;parentNode-&gt;removeChild($oldnode);
+ }
+ 
+-function replace_special_tags($resource, $doc, $node) {
+-  if ($node-&gt;nodeType == XML_ELEMENT_NODE) {
+-    if ($node-&gt;prefix == 'xeemes') {
+-      if ($node-&gt;localName == 'xsl-transformation') {
+-	$new = replace_xsl_transformation($resource, $doc, $node);
+-	replace_node($node, $new);
++function replace_special_tags($resource, $nodes,
++			      $already_included_locations = null) {
++  if (!$already_included_locations)
++    $already_included_locations = array($resource-&gt;location);
++
++  if (!is_array($nodes))
++    $nodes = array($nodes);
++
++  foreach ($nodes as $node) {
++    if ($node-&gt;nodeType == XML_ELEMENT_NODE) {
++      if ($node-&gt;namespaceURI == XEEMES_NS_URI) {
++	if ($node-&gt;localName == 'xsl-transformation') {
++	  $new = make_xsl_transformation($resource, $node);
++	  replace_node($node, $new);
++	} else if ($node-&gt;localName == 'resource') {
++	  $new = include_resource($resource, $node,
++				  $already_included_locations);
++	  replace_node($node, $new);
++	} else {
++	  $err = $node-&gt;ownerDocument-&gt;createTextNode('Unknown special tag: '.
++						      $node-&gt;localName);
++	  print_r($node-&gt;parentNode);
++	  $node-&gt;parentNode-&gt;replaceChild($err, $node);
++	}
+       } else {
+-	$node-&gt;parentNode-&gt;replaceChild($doc-&gt;createTextNode('Unknown special tag: '.$node-&gt;localName), $node);
++	foreach (nodelist2array($node-&gt;childNodes) as $child)
++	  replace_special_tags($resource, $child, $already_included_locations);
+       }
+-    } else {
+-      foreach (nodelist2array($node-&gt;childNodes) as $child) {
+-	replace_special_tags($resource, $doc, $child);
+-      }
+     }
+   }
+ }
+ 
+-function replace_xsl_transformation($resource, $doc, $node) {
++function make_xsl_transformation($resource, $node) {
+   // TODO: Error checking
+   // load stylesheet
++  $doc = $node-&gt;ownerDocument;
+   $stylesheet_res = get_resource($node-&gt;getAttribute('stylesheet'), array(),
+ 				 $resource-&gt;get_location());
+   $stylesheet = new XSLTProcessor();
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000008.html">[Xeemes-commits] r10 - trunk/src
+</A></li>
+	<LI>Next message: <A HREF="000010.html">[Xeemes-commits] r12 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#9">[ date ]</a>
+              <a href="thread.html#9">[ thread ]</a>
+              <a href="subject.html#9">[ subject ]</a>
+              <a href="author.html#9">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/xeemes-commits">More information about the Xeemes-commits
+mailing list</a><br>
+</body></html>

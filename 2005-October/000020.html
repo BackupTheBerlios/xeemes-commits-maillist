@@ -1,0 +1,124 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Xeemes-commits] r22 - trunk/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/xeemes-commits/2005-October/index.html" >
+   <LINK REL="made" HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r22%20-%20trunk/src&In-Reply-To=%3C200510282101.j9SL1VC2012654%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000019.html">
+   <LINK REL="Next"  HREF="000021.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Xeemes-commits] r22 - trunk/src</H1>
+    <B>David Frese at BerliOS</B> 
+    <A HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r22%20-%20trunk/src&In-Reply-To=%3C200510282101.j9SL1VC2012654%40sheep.berlios.de%3E"
+       TITLE="[Xeemes-commits] r22 - trunk/src">dfrese at berlios.de
+       </A><BR>
+    <I>Fri Oct 28 23:01:31 CEST 2005</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000019.html">[Xeemes-commits] r21 - trunk/src
+</A></li>
+        <LI>Next message: <A HREF="000021.html">[Xeemes-commits] r23 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#20">[ date ]</a>
+              <a href="thread.html#20">[ thread ]</a>
+              <a href="subject.html#20">[ subject ]</a>
+              <a href="author.html#20">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: dfrese
+Date: 2005-10-28 23:01:31 +0200 (Fri, 28 Oct 2005)
+New Revision: 22
+
+Modified:
+   trunk/src/resources.inc
+Log:
+Subject: Updated resource class
+
+- Added conversion of location to filesystem charset
+- Store args
+- Added getParentResource method
+
+
+Modified: trunk/src/resources.inc
+===================================================================
+--- trunk/src/resources.inc	2005-10-28 20:51:12 UTC (rev 21)
++++ trunk/src/resources.inc	2005-10-28 21:01:31 UTC (rev 22)
+@@ -41,6 +41,7 @@
+ $directory_indices = array('Index', 'index', 'Index.xhtml', 'index.xhtml',
+ 			   'Index.html', 'index.html', 'Index.php',
+ 			   'index.php');
++$filesystem_charset = 'iso-8859-1';
+ 
+ function get_resource($location, $args, $relation_location = '') {
+   if (substr($location, 0, 1) != '/') {
+@@ -85,18 +86,22 @@
+   /* location */
+   /* meta data */
+   /* content */
+-  var $location;
++  var $location; // in utf-8 charset
+   var $meta_data;
+ 
+   var $filename;
+   var $meta_filename;
+ 
++  var $args;
++
+   function Resource ($location, $args) {
+     $this-&gt;location = $location;
+     $this-&gt;meta_data = null;
+ 
+-    $this-&gt;filename = XEEMES_BASE_DIR.'/data'.$location; // TODO illegal chars
++    $this-&gt;filename = XEEMES_BASE_DIR.'/data'.
++      iconv('utf-8', $filesystem_charset, $location); // TODO illegal chars
+     $this-&gt;meta_filename = $this-&gt;filename.'.meta';
++    $this-&gt;args = $args;
+   }
+ 
+   function type() {
+@@ -184,6 +189,10 @@
+ 	return $name;
+     }
+   }
++
++  function getParentResource() {
++    return get_resource(dirname($this-&gt;location), array());
++  }
+ }
+ 
+ // TODO: maybe move inline-code into classes
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000019.html">[Xeemes-commits] r21 - trunk/src
+</A></li>
+	<LI>Next message: <A HREF="000021.html">[Xeemes-commits] r23 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#20">[ date ]</a>
+              <a href="thread.html#20">[ thread ]</a>
+              <a href="subject.html#20">[ subject ]</a>
+              <a href="author.html#20">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/xeemes-commits">More information about the Xeemes-commits
+mailing list</a><br>
+</body></html>

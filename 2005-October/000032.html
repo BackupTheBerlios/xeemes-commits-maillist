@@ -1,0 +1,108 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Xeemes-commits] r34 - trunk/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/xeemes-commits/2005-October/index.html" >
+   <LINK REL="made" HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r34%20-%20trunk/src&In-Reply-To=%3C200510302032.j9UKWnLE022151%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000031.html">
+   <LINK REL="Next"  HREF="000033.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Xeemes-commits] r34 - trunk/src</H1>
+    <B>David Frese at BerliOS</B> 
+    <A HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r34%20-%20trunk/src&In-Reply-To=%3C200510302032.j9UKWnLE022151%40sheep.berlios.de%3E"
+       TITLE="[Xeemes-commits] r34 - trunk/src">dfrese at berlios.de
+       </A><BR>
+    <I>Sun Oct 30 21:32:49 CET 2005</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000031.html">[Xeemes-commits] r33 - trunk/src
+</A></li>
+        <LI>Next message: <A HREF="000033.html">[Xeemes-commits] r35 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#32">[ date ]</a>
+              <a href="thread.html#32">[ thread ]</a>
+              <a href="subject.html#32">[ subject ]</a>
+              <a href="author.html#32">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: dfrese
+Date: 2005-10-30 21:32:45 +0100 (Sun, 30 Oct 2005)
+New Revision: 34
+
+Modified:
+   trunk/src/resources.inc
+Log:
+Subject: Remove extension from default resource name
+
+
+
+Modified: trunk/src/resources.inc
+===================================================================
+--- trunk/src/resources.inc	2005-10-30 20:29:34 UTC (rev 33)
++++ trunk/src/resources.inc	2005-10-30 20:32:45 UTC (rev 34)
+@@ -55,9 +55,19 @@
+   if ($info['basename'][0] == '.') {
+     // dot-files
+     $einfo = pathinfo(substr($info['basename'], 1));
+-    $info['extension'] = $einfo['extension'];
++    if (isset($einfo['extension']))
++      $info['extension'] = $einfo['extension'];
++    else
++      unset($info['extension']);
+   }
+ 
++  if (isset($info['extension']))
++    $info['name'] = substr($info['basename'], 0,
++			   strlen($info['basename'])
++			   - strlen($info['extension']) - 1);
++  else
++    $info['name'] = $info['basename'];
++
+   return $info;
+ }
+ 
+@@ -193,7 +203,8 @@
+     if ($name)
+       return $name;
+     else {
+-      $name = basename($this-&gt;location);
++      $info = mypathinfo($this-&gt;location);
++      $name = $info['name'];
+       if ($name != '')
+ 	return $name;
+       else
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000031.html">[Xeemes-commits] r33 - trunk/src
+</A></li>
+	<LI>Next message: <A HREF="000033.html">[Xeemes-commits] r35 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#32">[ date ]</a>
+              <a href="thread.html#32">[ thread ]</a>
+              <a href="subject.html#32">[ subject ]</a>
+              <a href="author.html#32">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/xeemes-commits">More information about the Xeemes-commits
+mailing list</a><br>
+</body></html>

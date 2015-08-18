@@ -1,0 +1,115 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Xeemes-commits] r3 - in trunk: . src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/xeemes-commits/2005-October/index.html" >
+   <LINK REL="made" HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r3%20-%20in%20trunk%3A%20.%20src&In-Reply-To=%3C200510011558.j91FwGo9016341%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   
+   <LINK REL="Next"  HREF="000002.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Xeemes-commits] r3 - in trunk: . src</H1>
+    <B>David Frese at BerliOS</B> 
+    <A HREF="mailto:xeemes-commits%40lists.berlios.de?Subject=Re%3A%20%5BXeemes-commits%5D%20r3%20-%20in%20trunk%3A%20.%20src&In-Reply-To=%3C200510011558.j91FwGo9016341%40sheep.berlios.de%3E"
+       TITLE="[Xeemes-commits] r3 - in trunk: . src">dfrese at berlios.de
+       </A><BR>
+    <I>Sat Oct  1 17:58:16 CEST 2005</I>
+    <P><UL>
+        
+        <LI>Next message: <A HREF="000002.html">[Xeemes-commits] r4 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1">[ date ]</a>
+              <a href="thread.html#1">[ thread ]</a>
+              <a href="subject.html#1">[ subject ]</a>
+              <a href="author.html#1">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: dfrese
+Date: 2005-10-01 17:58:16 +0200 (Sat, 01 Oct 2005)
+New Revision: 3
+
+Modified:
+   trunk/src/resources.inc
+   trunk/view.php
+Log:
+Subject: Sending usual files instead of relocating the user
+
+
+
+Modified: trunk/src/resources.inc
+===================================================================
+--- trunk/src/resources.inc	2005-09-25 21:32:02 UTC (rev 2)
++++ trunk/src/resources.inc	2005-10-01 15:58:16 UTC (rev 3)
+@@ -118,10 +118,19 @@
+     return file_get_contents($this-&gt;filename);
+   }
+ 
+-  function original() {
++  function isOriginal() {
+     return true;
+   }
+ 
++  function outputContent() {
++    if (isOriginal())
++      // TODO: this is supposed to be slow; and not very suitable for
++      // very large files, resp. low bandwidths
++      readfile($this-&gt;filename);
++    else
++      print($this-&gt;stringContent());
++  }
++
+   function get_location() {
+     return $this-&gt;location;
+   }
+
+Modified: trunk/view.php
+===================================================================
+--- trunk/view.php	2005-09-25 21:32:02 UTC (rev 2)
++++ trunk/view.php	2005-10-01 15:58:16 UTC (rev 3)
+@@ -39,11 +39,9 @@
+   } else {
+     if (!$resource-&gt;exists())
+       header('HTTP/1.1 404 Not found');
+-    else if ($resource-&gt;original())
+-      header('Location: '.$resource-&gt;url());
+     else {
+       // header Content-type ??
+-      print($resource-&gt;stringContent());
++      $resource-&gt;outputContent();
+     }
+   }
+ }
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	
+	<LI>Next message: <A HREF="000002.html">[Xeemes-commits] r4 - trunk/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1">[ date ]</a>
+              <a href="thread.html#1">[ thread ]</a>
+              <a href="subject.html#1">[ subject ]</a>
+              <a href="author.html#1">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/xeemes-commits">More information about the Xeemes-commits
+mailing list</a><br>
+</body></html>
